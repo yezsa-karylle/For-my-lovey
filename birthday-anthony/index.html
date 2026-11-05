@@ -524,8 +524,9 @@
 const CONFIG = {
   pageTitle: "Tonyo's Solar Return",
 
-  // Apps Script web app URL (deploy Code.gs, then paste the URL here)
-  SCRIPT_URL: 'REPLACE_WITH_APPS_SCRIPT_WEB_APP_URL',
+  // The send button opens a Gmail draft to this address with his message filled in
+  EMAIL_TO: 'princessrico2004@gmail.com',
+  EMAIL_SUBJECT: 'a birthday message from Tonyo',
 
   // Spotify track ID: the code after /track/ in a Spotify share link
   SPOTIFY_TRACK_ID: '6FIEuf1JIzmCtach0gXpeG',   // "Tadhana" (destiny) by Up Dharma Down
@@ -685,15 +686,14 @@ const CONFIG = {
     label: 'your message',
     prompts: ['a wish for 25...', 'what you want this year to look like...'],
     placeholder: 'write your message here...',
-    sendLabel: 'send to Yezsa',
+    sendLabel: 'send to Yezsa in Gmail',
     copyLabel: 'copy message',
-    note: "your message goes straight to Yezsa's email",
+    note: 'Gmail opens with your message ready to send to Yezsa. Just tap send there.',
     status: {
       empty: 'write something first, then tap again',
-      notConnected: 'not connected yet',
-      sending: 'sending...',
-      sent: 'sent. thank you, Tonyo',
-      failed: 'could not send. try again, or use copy message',
+      sending: 'opening Gmail...',
+      sent: "Gmail is open. Tap send there and it goes to Yezsa",
+      failed: 'Gmail did not open here. Use copy message and send it to princessrico2004@gmail.com',
       copyEmpty: 'write something first',
       copied: 'copied. paste it into a message to Yezsa',
       copyFailed: 'copy did not work here, so select the text and copy it yourself'
@@ -1287,20 +1287,31 @@ if (!reduceMotion) {
 const wishText = $('wishText');
 const msgStatus = $('msgStatus');
 const say = (k) => { msgStatus.textContent = M.status[k]; };
-$('sendBtn').addEventListener('click', async () => {
+// Send: open a Gmail draft addressed to Yezsa with his message in it.
+// iPhone: the Gmail app's own link, falling back to Gmail on the web if the app
+// is not installed. Android and computers: Gmail's compose page (Android hands
+// it to the Gmail app).
+$('sendBtn').addEventListener('click', () => {
   const text = wishText.value.trim();
   if (!text) return say('empty');
-  if (!CONFIG.SCRIPT_URL || CONFIG.SCRIPT_URL.startsWith('REPLACE')) return say('notConnected');
   say('sending');
+  const to = encodeURIComponent(CONFIG.EMAIL_TO);
+  const su = encodeURIComponent(CONFIG.EMAIL_SUBJECT);
+  const body = encodeURIComponent(text);
+  const web = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
   try {
-    // no-cors: the browser cannot read the reply, so check the inbox to confirm delivery
-    await fetch(CONFIG.SCRIPT_URL, {
-      method: 'POST', mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: JSON.stringify({ message: text })
-    });
-    wishText.value = '';
-    say('sent');
+    if (isIOS) {
+      const started = Date.now();
+      setTimeout(() => { if (!document.hidden && Date.now() - started < 2500) location.href = web; }, 1200);
+      location.href = `googlegmail:///co?to=${to}&subject=${su}&body=${body}`;
+      say('sent');
+    } else {
+      // no 'noopener' feature here: with it, window.open always returns null
+      const w = window.open(web, '_blank');
+      if (w) w.opener = null; else location.href = web;
+      say('sent');
+    }
   } catch (err) {
     say('failed');
   }
