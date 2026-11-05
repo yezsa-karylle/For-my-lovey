@@ -294,13 +294,13 @@
 
   /* ---------- Song ---------- */
   .song-card {
-    max-width: 560px; margin: 0 auto; padding: 18px; border-radius: 14px;
+    max-width: 520px; margin: 30px auto 0; padding: 14px 16px 12px; display: grid; gap: 8px; border-radius: 14px;
     background: #ffffff08; box-shadow: inset 0 0 0 1px #caa04c55;
   }
   .song-card.nudge { animation: nudge .8s ease 2; }
   @keyframes nudge { 50% { box-shadow: inset 0 0 0 2px var(--gold-hi), 0 0 30px #caa04c66; } }
   #songEmbed { min-height: 152px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; }
-  #songLink { display: inline-block; margin-top: 10px; color: var(--gold-hi); font-family: var(--hand); font-size: 22px; }
+  #songLink { display: inline-block; color: var(--gold-hi); font-family: var(--hand); font-size: 22px; }
   #musicBtn {
     position: fixed; z-index: 55; width: 52px; height: 52px; border-radius: 50%; cursor: pointer;
     right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
@@ -380,6 +380,11 @@
       <div class="eyebrow" id="heroEyebrow"></div>
       <h1 id="greeting"></h1>
       <svg class="constel" id="constel" viewBox="0 0 520 200" aria-hidden="true"></svg>
+      <div class="song-card">
+        <div class="eyebrow" id="songEyebrow"></div>
+        <div id="songEmbed"></div>
+        <a id="songLink" target="_blank" rel="noopener"></a>
+      </div>
       <div class="scroll-cue" id="scrollCue"></div>
     </div>
   </section>
@@ -482,17 +487,6 @@
     </div>
   </section>
 
-  <section id="song">
-    <div class="wrap" style="text-align:center">
-      <div class="eyebrow" id="songEyebrow"></div>
-      <h2 class="foil" id="songTitle"></h2>
-      <div class="song-card">
-        <div id="songEmbed"></div>
-        <a id="songLink" target="_blank" rel="noopener"></a>
-      </div>
-    </div>
-  </section>
-
   <section id="message">
     <div class="wrap msg">
       <div class="eyebrow" id="msgEyebrow"></div>
@@ -534,7 +528,7 @@ const CONFIG = {
   SCRIPT_URL: 'REPLACE_WITH_APPS_SCRIPT_WEB_APP_URL',
 
   // Spotify track ID: the code after /track/ in a Spotify share link
-  SPOTIFY_TRACK_ID: '09skqWIeJAjAF9gUYvz3Tk',   // "sun and moon" by anees
+  SPOTIFY_TRACK_ID: '6FIEuf1JIzmCtach0gXpeG',   // "Tadhana" (destiny) by Up Dharma Down
 
   intro: {
     lead: 'Tonyo, draw a card',
@@ -681,9 +675,8 @@ const CONFIG = {
   },
 
   song: {
-    eyebrow: 'now playing',
-    title: 'A song for my sun and moon',
-    linkText: 'sun and moon, by anees'
+    eyebrow: 'now playing · tadhana, up dharma down',
+    linkText: 'open it on Spotify'
   },
 
   message: {
@@ -1012,7 +1005,6 @@ $('letterText').append(el('p', 'last', L.closing), el('p', 'sign', L.sign));
 $('galEyebrow').textContent = CONFIG.gallery.eyebrow;
 $('galTitle').textContent = CONFIG.gallery.title;
 $('songEyebrow').textContent = CONFIG.song.eyebrow;
-$('songTitle').textContent = CONFIG.song.title;
 const songLink = $('songLink');
 songLink.href = 'https://open.spotify.com/track/' + CONFIG.SPOTIFY_TRACK_ID;
 songLink.textContent = CONFIG.song.linkText;
