@@ -35,7 +35,7 @@
 
     --foil: linear-gradient(115deg, #8a6424 0%, #e9c76f 18%, #fff0bd 30%, #c99a43 46%, #f2d27e 62%, #9b7330 80%, #e6c46c 100%);
     --tex-velvet: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='v'><feTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .7  0 0 0 0 .6  0 0 0 0 1  0 0 0 .13 0'/></filter><rect width='100%' height='100%' filter='url(%23v)'/></svg>");
-    --tex-nap: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='.004 .012' numOctaves='3' seed='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .55  0 0 0 0 .45  0 0 0 0 .9  0 0 0 .5 -.18'/></filter><rect width='100%' height='100%' filter='url(%23n)'/></svg>");
+    --tex-nap: radial-gradient(60% 40% at 18% 22%, #ffffff0d, transparent 70%), radial-gradient(55% 45% at 82% 68%, #ffffff0a, transparent 70%);
     --tex-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .25  0 0 0 0 .17  0 0 0 0 .08  0 0 0 .22 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
     --tex-fox: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.02' numOctaves='4' seed='11' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .55  0 0 0 0 .38  0 0 0 0 .15  0 0 0 1.3 -.88'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
   }
@@ -122,7 +122,7 @@
   .cardface .name {
     margin: 0 12px 14px; padding: 5px 6px 4px; text-align: center;
     background: var(--card); background-image: var(--tex-grain);
-    color: var(--ink); font-family: var(--caps); font-size: clamp(13px, 3.6vw, 16px); line-height: 1.2; letter-spacing: .04em;
+    color: var(--ink); font-family: var(--hand); font-weight: 700; font-size: clamp(19px, 5vw, 22px); line-height: 1.05;
     box-shadow: 0 0 0 1px var(--gold-lo);
   }
 
@@ -147,9 +147,9 @@
     display: flex; flex-direction: column; gap: 10px; overflow: hidden;
     box-shadow: 0 18px 30px -12px #000a, inset 0 0 0 1px var(--card-edge);
   }
-  .reading .rhead { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--caps); font-size: 13px; letter-spacing: .14em; color: var(--oxblood); border-bottom: 1px solid #8e2a3a44; padding-bottom: 6px; }
+  .reading .rhead { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--hand); font-weight: 700; font-size: 20px; letter-spacing: .02em; color: var(--oxblood); border-bottom: 1px solid #8e2a3a44; padding-bottom: 6px; }
   .reading .rhead span:last-child { font-family: var(--glyph); letter-spacing: 0; font-size: 15px; }
-  .reading p { margin: 0; font-size: clamp(16px, 4.4vw, 18px); line-height: 1.5; overflow-wrap: anywhere; }
+  .reading p { margin: 0; font-family: var(--hand); font-weight: 500; font-size: clamp(20px, 5.4vw, 22px); line-height: 1.22; overflow-wrap: anywhere; }
   .reading .stamp {
     margin-top: auto; align-self: flex-end; font-family: var(--hand); font-size: 20px; color: var(--oxblood);
     transform: rotate(-4deg);
@@ -207,6 +207,28 @@
   .wheel .cap { font-family: var(--caps); font-size: 11px; letter-spacing: .14em; fill: var(--muted); text-anchor: middle; }
   .wheel-note { text-align: center; font-family: var(--hand); font-size: 20px; color: var(--muted); margin-top: 8px; }
 
+  /* ---------- Portrait card ---------- */
+  .portrait { display: grid; grid-template-columns: minmax(0, 210px) minmax(0, 1fr); gap: 22px; align-items: start; margin-top: 34px; }
+  .portrait .pcard { width: 100%; aspect-ratio: 7 / 12; transform: rotate(-2deg); box-shadow: 0 18px 30px -12px #000a; border-radius: 12px; }
+  .portrait h3 { font-family: var(--hand); font-weight: 700; font-size: 34px; line-height: 1; color: var(--gold-hi); margin: 4px 0 6px; }
+  .portrait .facts { font-family: var(--glyph), var(--body); font-size: 15px; color: var(--muted); margin: 0 0 10px; letter-spacing: .02em; }
+  .portrait p { font-family: var(--hand); font-size: 22px; line-height: 1.25; margin: 0 0 .6em; }
+  @media (max-width: 480px) { .portrait { grid-template-columns: minmax(0, 1fr); } .portrait .pcard { width: min(230px, 70vw); margin: 0 auto; } }
+
+  /* ---------- Long letter: stacked cardstock pages ---------- */
+  .pages { display: grid; gap: 28px; max-width: 700px; margin: 36px auto 0; }
+  .page {
+    position: relative; color: var(--ink);
+    background-color: var(--card); background-image: var(--tex-grain), var(--tex-fox), linear-gradient(180deg, #fff7e2, transparent 40%);
+    padding: 32px clamp(20px, 5vw, 48px) 30px; border-radius: 3px; box-shadow: 0 30px 50px -25px #000c;
+    transform: rotate(var(--tilt, 0deg));
+  }
+  .page h3 { font-family: var(--display); font-style: italic; font-weight: 400; font-size: clamp(24px, 4.4vw, 30px); line-height: 1.15; margin: 0 0 12px; color: var(--oxblood); display: flex; gap: 12px; align-items: baseline; }
+  .page h3 span { font-family: var(--glyph); font-style: normal; font-size: .8em; color: var(--gold-lo); }
+  .page p { font-size: clamp(17px, 2.3vw, 19.5px); margin: 0 0 1em; }
+  .page p:last-child { margin: 0; }
+  .page .sign { font-family: var(--hand); font-size: 32px; color: var(--oxblood); text-align: right; }
+
   /* ---------- Solar return (sticky orbit) ---------- */
   #solar { padding-block: 0; height: 260vh; }
   #solar .stick { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; text-align: center; padding-block: 56px 24px; }
@@ -241,10 +263,10 @@
     background: #1a1330; box-shadow: inset 0 0 0 5px var(--card), inset 0 0 0 7px var(--gold-lo), 0 24px 40px -18px #000d;
     transform: rotate(var(--tilt, 1deg));
   }
-  .tframe .num { font-family: var(--caps); color: var(--gold-hi); text-align: center; letter-spacing: .14em; font-size: 15px; padding: 6px 0 8px; }
+  .tframe .num { font-family: var(--hand); font-size: 22px !important; color: var(--gold-hi); text-align: center; letter-spacing: .14em; font-size: 15px; padding: 6px 0 8px; }
   .tframe .ph { padding: 0 6px; display: grid; place-items: center; }
   .tframe .ph img { box-shadow: 0 0 0 1px var(--gold-lo); }
-  .tframe .cap { margin: 10px 6px 0; padding: 4px 6px; text-align: center; background: var(--card); background-image: var(--tex-grain); color: var(--ink); font-family: var(--caps); font-size: 15px; letter-spacing: .04em; min-height: 1.6em; box-shadow: 0 0 0 1px var(--gold-lo); }
+  .tframe .cap { margin: 10px 6px 0; padding: 4px 6px; text-align: center; background: var(--card); background-image: var(--tex-grain); color: var(--ink); font-family: var(--hand); font-weight: 700; font-size: 21px; min-height: 1.4em; box-shadow: 0 0 0 1px var(--gold-lo); }
   .polaroid img { width: 100%; height: auto; }
   .polaroid .empty { text-align: center; color: var(--muted); font-family: var(--hand); font-size: 22px; line-height: 1.2; padding: 16px; }
   .polaroid .empty svg { width: 74px; height: 74px; display: block; margin: 0 auto 10px; }
@@ -376,6 +398,14 @@
         <div class="eyebrow" id="chartEyebrow"></div>
         <h2 class="foil" id="chartTitle"></h2>
         <div class="prose" id="crashText"></div>
+        <div class="portrait">
+          <div class="pcard" id="portraitCard"></div>
+          <div>
+            <h3 id="portraitName"></h3>
+            <p class="facts" id="portraitFacts"></p>
+            <div id="portraitText"></div>
+          </div>
+        </div>
       </div>
     </div>
   </section>
@@ -413,6 +443,14 @@
         <g id="orbitSun"><circle r="15" fill="url(#sunGrad)"/><circle r="22" fill="#f6dc9433"/></g>
       </svg>
       <p id="solarText"></p>
+    </div>
+  </section>
+
+  <section id="reading">
+    <div class="wrap">
+      <div class="eyebrow" id="readEyebrow"></div>
+      <h2 class="foil" id="readTitle"></h2>
+      <div class="pages" id="readPages"></div>
     </div>
   </section>
 
@@ -496,7 +534,7 @@ const CONFIG = {
   SCRIPT_URL: 'REPLACE_WITH_APPS_SCRIPT_WEB_APP_URL',
 
   // Spotify track ID: the code after /track/ in a Spotify share link
-  SPOTIFY_TRACK_ID: '3MytWN8L7shNYzGl4tAKRp',
+  SPOTIFY_TRACK_ID: '09skqWIeJAjAF9gUYvz3Tk',   // "sun and moon" by anees
 
   intro: {
     lead: 'Tonyo, draw a card',
@@ -566,6 +604,56 @@ const CONFIG = {
     sign: 'Yezsa'
   },
 
+  // His own card, beside the birth chart
+  portrait: {
+    card: { num: 'XXV', name: 'Tonyo', art: 'tonyo' },
+    name: 'Anthony, a.k.a. Tonyo',
+    facts: 'sun ♏︎ scorpio · moon ♋︎ cancer · life path 11',
+    text: [
+      'The card of the quiet one who feels everything.',
+      "Upright, it means loyalty that doesn't need an audience, a soft heart kept safe behind a straight face, and a gut feeling that is almost always right.",
+      "Reversed, it means he's hungry. Feed him."
+    ]
+  },
+
+  // The long letter: the full reading. A draft in Yezsa's voice, edit freely.
+  reading: {
+    eyebrow: 'a longer letter',
+    title: 'The full reading',
+    pages: [
+      { glyph: '', title: 'Dear Tonyo,', text: [
+        "Okay, since you made it this far, you get the long version. I promise there's no quiz at the end.",
+        "I know the cards and the planets are a little silly. But I wanted an excuse to tell you everything I see in you, and the sky happened to agree with me on most of it."
+      ] },
+      { glyph: '☉︎ ♏︎', title: 'What your sun says', text: [
+        "Scorpio is the sign of depth. Scorpios are supposed to be the ones who notice everything and say only half of it. They don't trust easily, but once they do, it's for keeps.",
+        "That's you. You don't make a big show of caring. You just show up, again and again, and you remember the small things I forget I even told you."
+      ] },
+      { glyph: '☽︎ ♋︎', title: 'What your moon says', text: [
+        "Your moon is in Cancer, the sign that rules home. People with a Cancer moon feel safest when the people they love are fed, warm, and okay.",
+        "They guard their soft side the way a crab guards its shell, so only a few people ever get to see it. I'm really lucky that I'm one of them."
+      ] },
+      { glyph: '11', title: 'What your number means', text: [
+        "Eleven is called a master number. It's one of the few that numerology doesn't add down to a single digit, and it's linked to intuition and to being a calm presence for other people.",
+        "Which explains why you can tell when something's wrong with me before I say a word."
+      ] },
+      { glyph: '☉︎ ↺', title: 'What 25 has in store', text: [
+        "Every birthday, the sun comes back to the exact spot it was in when you were born, and astrology says the year that starts there has its own theme.",
+        "For you at 25, I'm calling it now: this is a year of building. The work you've been quietly putting in starts to show. You get to be proud of yourself, out loud, for once.",
+        "And you'll have someone next to you the whole way, because the stars already said so, and I'm not about to argue with the stars."
+      ] },
+      { glyph: '♥︎', title: 'Why I love you (no astrology needed)', text: [
+        "I love that you're the same person with me as you are with everyone else, just softer. I love how loyal you are, to me, to your family, and to your friends.",
+        "I love that you listen. I love that when things get heavy, you don't panic, you just hold my hand and figure it out with me. I love that you let me be silly and never make me feel like too much.",
+        "I love that three years with you feels like no time at all and also like forever."
+      ] },
+      { glyph: '✦', title: 'One last prediction', text: [
+        "You don't believe in any of this, and that's okay. I believe in you enough for both of us.",
+        "So here's the one prediction I'd actually bet on: 25 is going to be good to you, because you're so good to everyone around you. And I'll be there for all of it."
+      ], sign: 'Love always, Yezsa' }
+    ]
+  },
+
   // Photos: put files in photos/ and list them here. Leave src empty for a placeholder.
   // Each photo is shown whole, never cropped. Frames alternate: a polaroid, then a tarot card.
   gallery: {
@@ -594,8 +682,8 @@ const CONFIG = {
 
   song: {
     eyebrow: 'now playing',
-    title: 'Your birthday song',
-    linkText: 'open the song on Spotify'
+    title: 'A song for my sun and moon',
+    linkText: 'sun and moon, by anees'
   },
 
   message: {
@@ -796,6 +884,29 @@ const ART = {
       <circle cx="139" cy="80" r="3" fill="#c0322a"/><circle cx="120" cy="177" r="3" fill="#c0322a"/></svg>`;
   },
 
+  tonyo(p) {
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet"><defs>
+      <radialGradient id="${p}h" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff3c4"/><stop offset=".6" stop-color="#f1c45a"/><stop offset="1" stop-color="#c58a2e"/></radialGradient>
+      <mask id="${p}m"><rect width="200" height="260" fill="#fff"/><circle cx="40" cy="52" r="14" fill="#000"/></mask></defs>
+      ${starsSVG(53, 30, 250)}
+      <g opacity=".9">${Array.from({ length: 28 }, (_, i) => { const a = i * Math.PI / 14, r2 = i % 2 ? 70 : 80; return `<line x1="${100 + 60 * Math.cos(a)}" y1="${96 + 60 * Math.sin(a)}" x2="${100 + r2 * Math.cos(a)}" y2="${96 + r2 * Math.sin(a)}" stroke="#f6dc94" stroke-width="1.6" stroke-linecap="round"/>`; }).join('')}</g>
+      <circle cx="100" cy="96" r="58" fill="url(#${p}h)" opacity=".9"/>
+      <circle cx="32" cy="58" r="18" fill="#c3cfdf" mask="url(#${p}m)"/>
+      <path d="M26 264C30 214 58 190 100 188C142 190 170 214 174 264z" fill="#1f1c24"/>
+      <path d="M86 182c4 10 24 10 28 0" fill="none" stroke="#3a3540" stroke-width="3"/>
+      <rect x="88" y="146" width="24" height="40" rx="8" fill="#d39a73"/>
+      <ellipse cx="69" cy="116" rx="5.5" ry="9" fill="#d9a37c"/><ellipse cx="131" cy="116" rx="5.5" ry="9" fill="#d9a37c"/>
+      <ellipse cx="100" cy="114" rx="31" ry="38" fill="#e2ad86"/>
+      <path d="M66 112C58 80 72 56 100 56C130 54 146 76 136 112C134 100 130 94 124 90C121 99 112 101 108 93C103 103 92 104 88 95C84 103 76 102 74 94C70 100 68 105 66 112z" fill="#1d1715"/>
+      <path d="M80 66c8-6 18-8 26-6M98 58c10 0 20 4 26 12M72 80c2-8 8-14 14-16" fill="none" stroke="#3b302b" stroke-width="2" stroke-linecap="round"/>
+      <path d="M82 106q7-3 13 0M105 106q7-3 13 0" fill="none" stroke="#2a201c" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M84 117q5-4 10 0M106 117q5-4 10 0" fill="none" stroke="#2a201c" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M100 118q-4 10-1 14q3 1 6-1" fill="none" stroke="#b9805c" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M90 138q10 7 20 0" fill="none" stroke="#8a4a3a" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="82" cy="128" r="6" fill="#e79aa6" opacity=".35"/><circle cx="118" cy="128" r="6" fill="#e79aa6" opacity=".35"/>
+      <text x="100" y="232" text-anchor="middle" font-size="26" fill="#caa04c" font-family="Noto Sans Symbols, Segoe UI Symbol, sans-serif">&#9807;&#65038;</text></svg>`;
+  },
+
   lovers(p) {
     let rays = '';
     for (let i = 0; i < 20; i++) { const a = i * Math.PI / 10; rays += `<line x1="${100 + 40 * Math.cos(a)}" y1="${70 + 40 * Math.sin(a)}" x2="${100 + (i % 2 ? 52 : 62) * Math.cos(a)}" y2="${70 + (i % 2 ? 52 : 62) * Math.sin(a)}" stroke="#f6dc94" stroke-width="2" stroke-linecap="round"/>`; }
@@ -843,6 +954,25 @@ $('chartEyebrow').textContent = L.chart.eyebrow;
 $('chartTitle').textContent = L.chart.title;
 L.chart.text.forEach((t) => $('crashText').append(el('p', null, t)));
 $('wheelNote').textContent = L.chart.note;
+const P = CONFIG.portrait;
+$('portraitCard').append(cardFace(P.card));
+$('portraitName').textContent = P.name;
+$('portraitFacts').textContent = P.facts;
+P.text.forEach((t) => $('portraitText').append(el('p', null, t)));
+
+const RD = CONFIG.reading;
+$('readEyebrow').textContent = RD.eyebrow;
+$('readTitle').textContent = RD.title;
+RD.pages.forEach((pg, i) => {
+  const d = el('article', 'page rv');
+  d.style.setProperty('--tilt', [-.8, .6, -.4, .9, -.6, .5, -.3][i % 7] + 'deg');
+  const h = el('h3', null, pg.title);
+  if (pg.glyph) h.prepend(el('span', null, pg.glyph));
+  d.append(h);
+  pg.text.forEach((t) => d.append(el('p', null, t)));
+  if (pg.sign) d.append(el('p', 'sign', pg.sign));
+  $('readPages').append(d);
+});
 
 function buildSpread(target, cards, tiltSeed) {
   cards.forEach((c, i) => {
