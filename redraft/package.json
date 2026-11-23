@@ -1,7 +1,7 @@
 {
   "name": "redraft",
   "productName": "Redraft",
-  "version": "1.0.0",
+  "version": "1.2.0",
   "description": "Edit scanned study notes with a mouse: layers, smooth brushes, text, cover & rewrite, replay.",
   "main": "main.cjs",
   "author": "Redraft",

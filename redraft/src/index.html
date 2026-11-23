@@ -16,11 +16,12 @@
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
-<div id="app" class="no-doc">
+<div id="app" class="no-doc at-home">
   <header class="topbar">
     <div class="tb-left">
       <button class="btn icon mobile-only" data-cmd="togglePages" data-tip="Pages"><span data-icon="layers"></span></button>
-      <div class="brand"><span class="brand-mark" data-icon="mark"></span><span class="brand-name">Redraft</span></div>
+      <button class="btn home-btn" data-cmd="home" data-tip="Back to all notebooks|Ctrl+Shift+H"><span data-icon="back"></span><span class="brand-mark" data-icon="mark"></span><span class="lbl">Home</span></button>
+      <span class="sep"></span>
       <button class="btn" data-cmd="open" data-tip="Open PDF, image or project|Ctrl+O"><span data-icon="folder"></span>Open</button>
       <button class="btn" data-cmd="save" data-tip="Save project|Ctrl+S"><span data-icon="save"></span>Save</button>
       <div class="menu-wrap">
@@ -72,18 +73,6 @@
     <section id="stage">
       <canvas id="view"></canvas>
       <nav class="toolbar" id="toolbar"></nav>
-      <div class="welcome">
-        <div class="welcome-card">
-          <h1><span class="brand-mark" data-icon="mark"></span>Redraft</h1>
-          <p class="lead">Edit your scanned notes with a mouse, touchpad, finger or Apple Pencil. Your scans stay safe on a locked layer underneath everything you draw.</p>
-          <div class="big-actions">
-            <button class="big-action" data-cmd="open"><span data-icon="file"></span><b>Open PDF or image</b><span>Scanned notes, photos, or a .redraft project</span></button>
-            <button class="big-action" data-cmd="newNotebook"><span data-icon="grid"></span><b>Blank grid notebook</b><span>Start on fresh grid paper</span></button>
-            <button class="big-action" data-cmd="help"><span data-icon="help"></span><b>Shortcuts</b><span>Every tool has a key</span></button>
-          </div>
-          <div class="recent" id="recent"></div>
-        </div>
-      </div>
       <div class="drop-hint">Drop PDF or images to open</div>
     </section>
 
@@ -98,6 +87,7 @@
     <span id="st-page"></span><span id="st-zoom"></span><span class="grow" id="st-hint"></span><span id="st-path"></span>
   </footer>
 </div>
+<div id="home" class="show"></div>
 <div id="popover-root"></div>
 <div id="modal-root"></div>
 <div id="toasts"></div>

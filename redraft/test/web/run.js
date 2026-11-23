@@ -195,11 +195,51 @@ await step('autosaves to IndexedDB and reopens after a reload', async () => {
   const n = await strokes();
   await page.reload();
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 30000 });
-  await page.waitForSelector('.recent-row');
-  await shot('05-phone-projects');
-  await page.tap('.recent-row .open');
+  await page.waitForSelector('#home.show .nb-card');
+  await page.waitForTimeout(300);
+  await shot('05-phone-home');
+  await page.tap('.hero [data-open]');
   await page.waitForFunction(() => window.__editor.project?.pages.length === 1, null, { timeout: 30000 });
   assert.equal(await strokes(), n);
+});
+
+await step('home screen: back to menu, cover, favourite, rename, duplicate, settings', async () => {
+  await page.tap('[data-cmd=home]');
+  await page.waitForSelector('#home.show .nb-card img', { timeout: 15000 });
+  assert.ok(await ed(() => document.getElementById('app').classList.contains('at-home')));
+  await page.tap('.nb-card .star');
+  assert.equal(await page.locator('.nb-card .star.on').count(), 2, 'favourites row + recents row');
+  await page.tap('.nb-grid:not(.compact) .nb-card .more');
+  await page.tap('.ctx-menu [data-c=rename]');
+  await page.fill('#prompt-in', 'Phone notes');
+  await page.tap('.modal [data-ok]');
+  await page.waitForFunction(() => document.querySelector('.hero h2')?.textContent === 'Phone notes');
+  assert.equal(await ed(() => window.__editor.project.title), 'Phone notes');
+  await page.tap('.nb-grid:not(.compact) .nb-card .more');
+  await page.tap('.ctx-menu [data-c=duplicate]');
+  await page.waitForFunction(() => document.querySelectorAll('.nb-grid:not(.compact) .nb-card').length === 2);
+  await shot('05b-phone-home-menu');
+  await page.tap('.home-tabs [data-tab=all]');
+  await page.fill('#home-search', 'copy');
+  assert.equal(await page.locator('.nb-card').count(), 1);
+  await page.tap('.nb-grid:not(.compact) .nb-card .more');
+  await page.tap('.ctx-menu [data-c=remove]');
+  await page.tap('.modal [data-yes]');
+  await page.waitForFunction(async () => (await window.api.listProjects()).length === 1);
+  await page.fill('#home-search', '');
+  await page.tap('.home-tabs [data-tab=settings]');
+  await page.waitForSelector('#set-theme');
+  await shot('05c-phone-settings');
+  await page.tap('#set-theme [data-v=dark]');
+  assert.equal(await ed(() => document.documentElement.dataset.theme), 'dark');
+  await page.tap('#set-theme [data-v=light]');
+  await page.tap('.home-tabs [data-tab=home]');
+  await page.tap('.hero [data-open]');
+  await page.waitForFunction(() => !document.getElementById('app').classList.contains('at-home'));
+  await page.goBack();
+  await page.waitForFunction(() => document.getElementById('app').classList.contains('at-home'));
+  await page.tap('.hero [data-open]');
+  await page.waitForFunction(() => !document.getElementById('app').classList.contains('at-home'));
 });
 
 await step('export PDF goes to the share sheet / download', async () => {
@@ -239,8 +279,8 @@ await step('works offline (Home Screen app with no signal)', async () => {
   await ctx.setOffline(true);
   await page.reload();
   await page.waitForFunction(() => window.__ready === true, null, { timeout: 30000 });
-  await page.waitForSelector('.recent-row');
-  await page.tap('.recent-row .open');
+  await page.waitForSelector('#home.show .nb-card');
+  await page.tap('.nb-card .cover');
   await page.waitForFunction(() => window.__editor.project?.pages.length === 1, null, { timeout: 30000 });
   await ed(() => window.__app.noRebuildPrompt = true);
   // OCR also runs offline: rebuild the PDF page.

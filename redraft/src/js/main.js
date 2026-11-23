@@ -12,7 +12,8 @@ import { analyzePage, rebuildOp } from './io/rebuild.js';
 import { loadHandFonts, resetHandCache } from './render/hand.js';
 import { openPlayer, playerOpen } from './ui/player.js';
 import { newProject, newGridPage, clone, uid } from './core/model.js';
-import { resetTextCache } from './render/draw.js';
+import { resetTextCache, renderPageCanvas, ensureImages } from './render/draw.js';
+import { Home, getMeta, setMeta, setThumb, getThumb, forgetMeta } from './ui/home.js';
 void ReplayEngine;
 
 const api = window.api;
@@ -39,6 +40,7 @@ function loadSettings() {
     const d = defaultSettings();
     if (typeof s.stabilizer === 'number') d.stabilizer = s.stabilizer;
     if (s.markUnsure === false) d.markUnsure = false;
+    if (s.resumePage === false) d.resumePage = false;
     for (const t of Object.keys(d.tools)) Object.assign(d.tools[t], (s.tools || {})[t] || {});
     editor.settings = d;
   } catch { /* defaults */ }
@@ -52,57 +54,136 @@ function applyTheme(theme) {
   const css = getComputedStyle(document.documentElement);
   editor.workspaceColor = css.getPropertyValue('--workspace').trim();
   editor.accent = css.getPropertyValue('--accent').trim();
-  $('#theme-icon').innerHTML = icon(theme === 'dark' ? 'sun' : 'moon');
-  try { localStorage.setItem('redraft.theme', theme); } catch { /* ignore */ }
+  $$('[data-cmd=theme]').forEach((b) => { b.querySelector('svg')?.remove(); b.insertAdjacentHTML('afterbegin', icon(theme === 'dark' ? 'sun' : 'moon')); });
   editor.requestRender();
 }
-const toggleTheme = () => applyTheme(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
+const themePref = () => { try { return localStorage.getItem('redraft.theme') || 'system'; } catch { return 'system'; } };
+const systemDark = matchMedia('(prefers-color-scheme: dark)');
+function setThemePref(pref) {
+  try { localStorage.setItem('redraft.theme', pref); } catch { /* ignore */ }
+  applyTheme(pref === 'system' ? (systemDark.matches ? 'dark' : 'light') : pref);
+}
+systemDark.addEventListener?.('change', () => { if (themePref() === 'system') setThemePref('system'); });
+const toggleTheme = () => setThemePref(document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark');
 
-// ------------------------------------------------------------ recent files
+// ------------------------------------------------------------ library (home screen)
+// Windows: the list of notebooks you opened (files stay where they are).
+// Browser/iPhone: every notebook saved in this device's storage.
 function recentList() { try { return JSON.parse(localStorage.getItem('redraft.recent') || '[]'); } catch { return []; } }
-function addRecent(path, title) {
-  if (!path || app.autosavePath) return;
+function addRecent(path, title, pages) {
+  if (!path || WEB) return;
+  const old = recentList().find((r) => r.path === path) || {};
   const list = recentList().filter((r) => r.path !== path);
-  list.unshift({ path, title, t: Date.now() });
-  localStorage.setItem('redraft.recent', JSON.stringify(list.slice(0, 8)));
+  list.unshift({ ...old, path, title, pages: pages ?? old.pages, t: Date.now() });
+  try { localStorage.setItem('redraft.recent', JSON.stringify(list.slice(0, 60))); } catch { /* ignore */ }
 }
-async function renderRecentWeb() {
-  const el = $('#recent');
-  const list = await api.listProjects();
-  if (!list.length) { el.innerHTML = '<p class="hint">Projects are saved automatically in this browser as you work.</p>'; return; }
-  el.innerHTML = '<h4>Your projects (saved on this device)</h4>';
-  for (const r of list) {
-    const row = h(`<div class="recent-row"><button class="open"><span>${esc(r.title)}</span><span class="path">${r.pages} page${r.pages === 1 ? '' : 's'} · ${new Date(r.updated).toLocaleDateString()} · ${(r.size / 1e6).toFixed(1)} MB</span></button><button class="btn icon danger" data-tip="Delete from this device">${icon('trash')}</button></div>`);
-    row.querySelector('.open').onclick = () => openPaths([r.path + '.redraft']);
-    row.querySelector('.danger').onclick = async () => {
-      if (!(await confirmDialog('Delete project?', `"${r.title}" will be removed from this device. Download it first (Export → Download project file) if you want a copy.`, 'Delete', true))) return;
-      await api.deleteProject(r.path);
-      renderRecent();
-    };
-    el.appendChild(row);
-  }
+function dropRecent(path) {
+  try { localStorage.setItem('redraft.recent', JSON.stringify(recentList().filter((r) => r.path !== path))); } catch { /* ignore */ }
 }
 
-function renderRecent() {
-  if (WEB) return renderRecentWeb();
-  const list = recentList();
-  const el = $('#recent');
-  if (!list.length) { el.innerHTML = ''; return; }
-  el.innerHTML = '<h4>Recent projects</h4>';
-  for (const r of list) {
-    const b = h(`<button><span>${esc(r.title || baseName(r.path))}</span><span class="path">${esc(r.path)}</span></button>`);
-    b.onclick = async () => {
-      if (!(await api.exists(r.path))) {
-        localStorage.setItem('redraft.recent', JSON.stringify(recentList().filter((x) => x.path !== r.path)));
-        renderRecent();
+/** Cover image for the home screen: the first page, small. */
+async function updateThumb() {
+  const p = editor.project, path = app.path;
+  if (!p || !path || !p.pages.length) return;
+  try {
+    const page = p.pages[0];
+    const bmp = await editor.ensureBitmap(page);
+    await ensureImages(page.layers.flatMap((l) => l.objects));
+    const c = renderPageCanvas(page, bmp, 300 / page.w);
+    const blob = await c.convertToBlob({ type: 'image/jpeg', quality: 0.72 });
+    const url = await new Promise((res, rej) => { const r = new FileReader(); r.onload = () => res(r.result); r.onerror = rej; r.readAsDataURL(blob); });
+    setThumb(path, url);
+    app.thumbAt = Date.now();
+  } catch (e) { console.warn('thumbnail', e); }
+}
+
+async function readProjectAt(path) { return loadProject(await api.readFile(path)); }
+async function writeProjectAt(path, project, assets) {
+  await api.writeFile(path, await serializeProject(project, assets), { title: project.title, pages: project.pages.length });
+}
+const isOpen = (e) => editor.project && app.path === e.path && !$('#app').classList.contains('no-doc');
+
+const library = {
+  web: WEB,
+  async list() {
+    if (WEB) {
+      const list = await api.listProjects();
+      return list.map((r) => ({ path: r.path, title: r.title, pages: r.pages, updated: r.updated, size: r.size }));
+    }
+    return recentList().map((r) => ({ path: r.path, title: r.title || baseName(r.path), pages: r.pages, updated: r.t }));
+  },
+  current: () => (editor.project && app.path && !$('#app').classList.contains('no-doc') ? { path: app.path, page: editor.pageIndex } : null),
+  async open(e, { replay = false } = {}) {
+    if (isOpen(e)) showEditor();
+    else {
+      if (!WEB && !(await api.exists(e.path))) {
+        dropRecent(e.path);
+        forgetMeta(e.path);
         toast('That file was moved or deleted');
-        return;
+        return home.refresh();
       }
-      openPaths([r.path]);
-    };
-    el.appendChild(b);
+      await openPaths([WEB ? e.path + '.redraft' : e.path]);
+    }
+    if (replay && isOpen(e)) setTimeout(openReplay, 250);
+  },
+  openProject: async () => openPaths(await api.openDialog('project')),
+  help: () => showHelp(),
+  async rename(e, title) {
+    if (isOpen(e)) { editor.project.title = title; updateTitle(); app.dirty = true; await saveNow(); }
+    else { const { project, assets } = await readProjectAt(e.path); project.title = title; await writeProjectAt(e.path, project, assets); }
+    if (!WEB) { const list = recentList().map((r) => (r.path === e.path ? { ...r, title } : r)); localStorage.setItem('redraft.recent', JSON.stringify(list)); }
+  },
+  async duplicate(e) {
+    if (isOpen(e)) await saveNow();
+    const { project, assets } = await readProjectAt(e.path);
+    project.id = uid('d');
+    project.title = `${project.title} copy`;
+    const target = WEB ? 'idb:' + project.id : await uniquePath(dirOf(e.path), project.title, 'redraft');
+    await writeProjectAt(target, project, assets);
+    addRecent(target, project.title, project.pages.length);
+    const th = getThumb(e.path);
+    if (th) setThumb(target, th);
+  },
+  async remove(e) {
+    if (isOpen(e) || app.path === e.path) { app.path = null; app.dirty = false; $('#app').classList.add('no-doc'); }
+    if (WEB) await api.deleteProject(e.path);
+    else dropRecent(e.path);
+  },
+  async share(e) {
+    if (!WEB) return api.showInFolder(e.path);
+    if (isOpen(e)) await saveNow();
+    await api.writeFile(`download:${e.title}.redraft`, await api.readFile(e.path));
+  },
+  settings: () => editor.settings,
+  setSetting(k, v) { editor.settings[k] = v; app.saveSettings(); editor.invalidateAll?.(); editor.requestRender(); },
+  themePref,
+  setThemePref,
+};
+const home = new Home(library);
+app.home = home;
+
+function showEditor() {
+  $('#app').classList.remove('at-home');
+  home.el.classList.remove('show');
+  document.querySelector('.ctx-menu')?.remove();
+  if (history.state?.v !== 'editor') history.pushState({ v: 'editor' }, '');
+  requestAnimationFrame(() => editor.resize?.());
+}
+async function goHome(fromHistory = false) {
+  if (!fromHistory && history.state?.v === 'editor') { history.back(); return; } // popstate brings us back here
+  editor.closeTextEditor?.();
+  $('#app').classList.add('at-home');
+  $$('.menu.open').forEach((m) => m.classList.remove('open'));
+  $('#app').classList.remove('pages-open', 'panel-open');
+  await home.show();
+  if (editor.project && app.path) {
+    if (app.dirty || app.saving) await saveNow();
+    await updateThumb();
+    home.refresh();
   }
 }
+window.addEventListener('popstate', () => { if (!$('#app').classList.contains('at-home')) goHome(true); });
+app.goHome = goHome;
 
 // ------------------------------------------------------------ document lifecycle
 function setDoc(project, assets, bitmaps, path, autosavePath = false) {
@@ -111,6 +192,10 @@ function setDoc(project, assets, bitmaps, path, autosavePath = false) {
   app.dirty = false;
   editor.load(project, assets, bitmaps);
   $('#app').classList.remove('no-doc');
+  const last = getMeta(path).lastPage || 0;
+  if (editor.settings.resumePage !== false && last > 0 && last < project.pages.length) editor.setPage(last, true);
+  showEditor();
+  if (!getThumb(path)) setTimeout(updateThumb, 1500);
   panels.refreshAll();
   updateTitle();
   updateStatus();
@@ -166,7 +251,7 @@ async function openPaths(paths) {
     setDoc(project, assets, bitmaps, target);
     app.dirty = true;
     await saveNow();
-    addRecent(target, project.title);
+    addRecent(target, project.title, project.pages.length);
     toast(`Opened ${project.pages.length} page${project.pages.length > 1 ? 's' : ''}. ${WEB ? 'Changes autosave on this device.' : `Autosaving to ${baseName(target)}.redraft next to your file.`}`, { ms: 4500 });
     if (!app.noRebuildPrompt) offerRebuild();
   } catch (e) {
@@ -187,7 +272,7 @@ async function openProjectFile(path) {
     const target = WEB ? 'idb:' + project.id : path;
     setDoc(project, assets, new Map(), target);
     if (WEB && !path.startsWith('idb:')) { app.dirty = true; await saveNow(); }
-    addRecent(target, project.title);
+    addRecent(target, project.title, project.pages.length);
   } catch (e) {
     pr.close();
     console.error(e);
@@ -202,6 +287,7 @@ async function newNotebook() {
   project.initial = { pages: clone(project.pages) };
   if (WEB) setDoc(project, new Map(), new Map(), 'idb:' + project.id, false);
   else setDoc(project, new Map(), new Map(), `${app.info.userData}${app.info.sep}Autosave${app.info.sep}${project.id}.redraft`, true);
+  addRecent(app.path, project.title, 1);
   app.dirty = true;
   saveSoon();
 }
@@ -253,6 +339,8 @@ async function saveNow() {
       const bytes = await serializeProject(editor.project, editor.assets);
       await api.writeFile(app.path, bytes, { title: editor.project.title, pages: editor.project.pages.length });
       app.lastError = null;
+      addRecent(app.path, editor.project.title, editor.project.pages.length);
+      if (!app.thumbAt || Date.now() - app.thumbAt > 20000) updateThumb();
       setSaveState(app.autosavePath ? 'Autosaved (not yet named)' : 'Saved');
     } catch (e) {
       console.error(e);
@@ -284,7 +372,7 @@ async function saveAs() {
   updateTitle();
   app.dirty = true;
   await saveNow();
-  addRecent(app.path, editor.project.title);
+  addRecent(app.path, editor.project.title, editor.project.pages.length);
   toast('Saved. Future changes autosave here.');
 }
 
@@ -587,6 +675,7 @@ const commands = {
   zoom100: () => editor.page && editor.setZoom(96 / editor.page.dpi),
   fit: () => editor.fit(),
   theme: toggleTheme,
+  home: () => goHome(),
   help: showHelp,
   addGridPage,
   duplicatePage,
@@ -596,7 +685,7 @@ const commands = {
 };
 // Phone drawers close when you go back to the page.
 $('#stage').addEventListener('pointerdown', () => $('#app').classList.remove('pages-open', 'panel-open'), true);
-editor.on('page', () => $('#app').classList.remove('pages-open'));
+editor.on('page', () => { $('#app').classList.remove('pages-open'); if (app.path && editor.project) setMeta(app.path, { lastPage: editor.pageIndex }); });
 editor.on('gesture', (g) => toast(g === 'undo' ? 'Undo' : 'Redo', { ms: 900 }));
 app.commands = commands;
 app.doExportPdf = doExportPdf;
@@ -612,7 +701,7 @@ document.addEventListener('click', (e) => {
   if (c && commands[c.dataset.cmd]) { $$('.menu.open').forEach((m) => m.classList.remove('open')); commands[c.dataset.cmd](); return; }
   const mb = e.target.closest('[data-menu]');
   if (mb) { const m = document.getElementById(mb.dataset.menu); const open = !m.classList.contains('open'); $$('.menu.open').forEach((x) => x.classList.remove('open')); m.classList.toggle('open', open); return; }
-  if (!e.target.closest('.menu')) $$('.menu.open').forEach((m) => m.classList.remove('open'));
+  if (!e.target.closest('.menu')) $$('.menu.open:not(.ctx-menu)').forEach((m) => m.classList.remove('open'));
 });
 
 // ------------------------------------------------------------ keyboard
@@ -631,6 +720,16 @@ window.addEventListener('keydown', (e) => {
   const lower = k.length === 1 ? k.toLowerCase() : k;
 
   if (k === 'F1' || (k === '?' && !ctrl)) { e.preventDefault(); showHelp(); return; }
+  if ($('#app').classList.contains('at-home')) {
+    if (k === 'Escape') { $$('.ctx-menu').forEach((m) => m.remove()); $$('.menu.open').forEach((m) => m.classList.remove('open')); if (isModalOpen()) closeModal(); return; }
+    if (isModalOpen()) return;
+    if (ctrl && lower === 'o') { e.preventDefault(); commands.open(); }
+    else if (ctrl && lower === 'n') { e.preventDefault(); newNotebook(); }
+    else if (ctrl && lower === 'f') { e.preventDefault(); $('#home-search').focus(); }
+    else if (ctrl && e.shiftKey && lower === 'l') { e.preventDefault(); toggleTheme(); }
+    return;
+  }
+  if (ctrl && e.shiftKey && lower === 'h') { e.preventDefault(); goHome(); return; }
   if (k === 'F11') { e.preventDefault(); api.toggleFullscreen(); return; }
   if (k === 'F12') { api.toggleDevtools(); return; }
   if (k === 'Escape') {
@@ -751,7 +850,7 @@ loadSettings();
 const panels = new Panels(editor, app);
 app.panels = panels;
 document.querySelectorAll('[data-icon]').forEach((el) => { if (el.id || el.className) el.innerHTML = icon(el.dataset.icon); else el.outerHTML = icon(el.dataset.icon); });
-applyTheme(localStorage.getItem('redraft.theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
+setThemePref(themePref());
 initTooltips();
 
 if (WEB) {
@@ -801,7 +900,7 @@ api.onOpenPath((p) => openPaths([p]));
 
 (async () => {
   app.info = await api.pathInfo();
-  renderRecent();
+  await home.show();
   // Fonts load lazily; re-measure text once they're ready.
   const fams = ['Caveat', 'Patrick Hand', 'Kalam', 'Architects Daughter', 'Indie Flower', 'Gaegu'];
   await Promise.allSettled([...fams.flatMap((f) => [300, 400, 700].map((w) => document.fonts.load(`${w} 40px "${f}"`))), loadHandFonts()]);
