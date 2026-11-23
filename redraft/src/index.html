@@ -10,6 +10,7 @@
   <script src="../node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
   <script src="../node_modules/jszip/dist/jszip.min.js"></script>
   <script src="../node_modules/mp4-muxer/build/mp4-muxer.js"></script>
+  <script src="../node_modules/webm-muxer/build/webm-muxer.js"></script>
   <script src="../node_modules/opentype.js/dist/opentype.min.js"></script>
   <script src="../node_modules/tesseract.js/dist/tesseract.min.js"></script>
   <script type="module" src="js/main.js"></script>
@@ -18,7 +19,8 @@
 <div id="app" class="no-doc">
   <header class="topbar">
     <div class="tb-left">
-      <div class="brand"><span class="brand-mark" data-icon="mark"></span>Redraft</div>
+      <button class="btn icon mobile-only" data-cmd="togglePages" data-tip="Pages"><span data-icon="layers"></span></button>
+      <div class="brand"><span class="brand-mark" data-icon="mark"></span><span class="brand-name">Redraft</span></div>
       <button class="btn" data-cmd="open" data-tip="Open PDF, image or project|Ctrl+O"><span data-icon="folder"></span>Open</button>
       <button class="btn" data-cmd="save" data-tip="Save project|Ctrl+S"><span data-icon="save"></span>Save</button>
       <div class="menu-wrap">
@@ -50,7 +52,8 @@
       </div>
       <span class="sep"></span>
       <button class="btn icon" data-cmd="theme" data-tip="Dark / light|Ctrl+Shift+L"><span id="theme-icon" data-icon="moon"></span></button>
-      <button class="btn icon" data-cmd="help" data-tip="Keyboard shortcuts|F1"><span data-icon="help"></span></button>
+      <button class="btn icon desktop-only" data-cmd="help" data-tip="Keyboard shortcuts|F1"><span data-icon="help"></span></button>
+      <button class="btn icon mobile-only" data-cmd="togglePanel" data-tip="Tool, colour and layers"><span data-icon="sliders"></span></button>
     </div>
   </header>
 

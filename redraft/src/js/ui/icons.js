@@ -38,6 +38,7 @@ const P = {
   dup: '<rect x="8" y="8" width="12" height="12" rx="2"/><path d="M4 16V6a2 2 0 0 1 2-2h10"/><path d="M14 11v6M11 14h6"/>',
   page: '<path d="M7 3h10a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2z"/><path d="M12 9v6M9 12h6"/>',
   wand: '<path d="M4 20L15 9"/><path d="M15 4v2M15 12v2M19 8h2M9 8h2M17.8 5.2l1.4-1.4M12.2 10.8l-1.4 1.4M17.8 10.8l1.4 1.4"/>',
+  sliders: '<path d="M4 6h10M18 6h2M4 12h4M12 12h8M4 18h12M20 18h0"/><circle cx="16" cy="6" r="2"/><circle cx="10" cy="12" r="2"/><circle cx="18" cy="18" r="2"/>',
   mark: '<path d="M5 19c3-1 4-5 7-9s5-5 7-5" /><path d="M14 19h6"/>',
 };
 

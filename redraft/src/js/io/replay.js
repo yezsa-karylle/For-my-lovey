@@ -555,49 +555,76 @@ export function drawTool(ctx, x, y, eraser, k = 1) {
   ctx.restore();
 }
 
-// ---------------------------------------------------------------- MP4 export
-const CODECS = [['avc1.640034', 'avc'], ['avc1.4d0034', 'avc'], ['vp09.00.41.08', 'vp9'], ['av01.0.08M.08', 'av1']];
+// ---------------------------------------------------------------- video export
+// MP4 (H.264) when the browser can encode it (Electron, Chrome, Safari 16.4+),
+// otherwise WebM (VP9/VP8) via WebCodecs, otherwise real-time MediaRecorder.
+const ENCODERS = [
+  ['avc1.640034', 'avc', 'mp4'], ['avc1.4d0034', 'avc', 'mp4'], ['avc1.42003e', 'avc', 'mp4'], ['avc1.42002a', 'avc', 'mp4'],
+  ['vp09.00.41.08', 'V_VP9', 'webm'], ['vp8', 'V_VP8', 'webm'],
+];
 
 export async function pickCodec(width, height, fps) {
-  if (typeof VideoEncoder === 'undefined') return null;
-  for (const [codec, mux] of CODECS) {
+  if (typeof VideoEncoder === 'undefined' || typeof VideoFrame === 'undefined') return null;
+  for (const [codec, mux, container] of ENCODERS) {
+    if (container === 'mp4' && !window.Mp4Muxer) continue;
+    if (container === 'webm' && !window.WebMMuxer) continue;
     const cfg = { codec, width, height, bitrate: 10_000_000, framerate: fps };
     if (mux === 'avc') cfg.avc = { format: 'avc' };
-    try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return { cfg, mux }; } catch { /* next */ }
+    try { if ((await VideoEncoder.isConfigSupported(cfg)).supported) return { cfg, mux, container }; } catch { /* next */ }
+  }
+  return null;
+}
+
+function recorderMime() {
+  if (typeof MediaRecorder === 'undefined') return null;
+  for (const m of ['video/mp4;codecs=avc1', 'video/mp4', 'video/webm;codecs=vp9', 'video/webm;codecs=vp8', 'video/webm']) {
+    if (MediaRecorder.isTypeSupported(m)) return m;
   }
   return null;
 }
 
 /**
- * Encode replays of the given pages into one MP4.
+ * Encode replays of the given pages into one video.
  * format: 'landscape' (1920x1080, camera follows the pen) or 'portrait' (1080x1920, whole page).
+ * Returns { bytes, container: 'mp4' | 'webm', ... }.
  */
-export async function exportReplayMp4(editor, pageIds, { mode = 'auto', speed = 8, fps = 30, format = 'landscape', onProgress = () => {}, isCancelled = () => false } = {}) {
+export async function exportReplayVideo(editor, pageIds, { mode = 'auto', speed = 8, fps = 30, format = 'landscape', onProgress = () => {}, isCancelled = () => false, forceRecorder = false } = {}) {
   const W = format === 'portrait' ? 1080 : 1920, H = format === 'portrait' ? 1920 : 1080;
-  const codec = await pickCodec(W, H, fps);
-  if (!codec) throw new Error('No video encoder is available on this computer.');
-  const engines = pageIds.map((id) => {
-    const m = mode === 'history' ? 'history' : 'auto';
-    return new ReplayEngine(editor, id, { mode: m });
-  });
+  const codec = forceRecorder ? null : await pickCodec(W, H, fps);
+  const engines = pageIds.map((id) => new ReplayEngine(editor, id, { mode: mode === 'history' ? 'history' : 'auto' }));
   const frameMs = (1000 / fps) * speed;
   const total = engines.reduce((s, e) => s + Math.ceil(e.duration / frameMs) + 1, 0);
-  const { Muxer, ArrayBufferTarget } = window.Mp4Muxer;
-  const muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: codec.mux, width: W, height: H, frameRate: fps }, fastStart: 'in-memory' });
-  let err = null;
-  const encoder = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: (e) => { err = e; } });
-  encoder.configure(codec.cfg);
-  const canvas = new OffscreenCanvas(W, H);
-  const ctx = canvas.getContext('2d');
-  let n = 0;
   const cam = { mode: format === 'portrait' ? 'page' : 'follow', ease: Math.min(1, 0.06 * Math.sqrt(speed)) };
-  for (const E of engines) {
-    const R = new ReplayRenderer(E, editor);
-    await R.prepare();
-    cam.jump = true;
-    for (let t = 0; t <= E.duration + frameMs; t += frameMs) {
-      R.render(ctx, W, H, t, cam);
-      cam.jump = false;
+
+  async function* frames(ctx) {
+    for (const E of engines) {
+      const R = new ReplayRenderer(E, editor);
+      await R.prepare();
+      cam.jump = true;
+      for (let t = 0; t <= E.duration + frameMs; t += frameMs) {
+        R.render(ctx, W, H, t, cam);
+        cam.jump = false;
+        yield;
+      }
+    }
+  }
+
+  if (codec) {
+    const canvas = new OffscreenCanvas(W, H);
+    const ctx = canvas.getContext('2d');
+    let muxer;
+    if (codec.container === 'mp4') {
+      const { Muxer, ArrayBufferTarget } = window.Mp4Muxer;
+      muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: codec.mux, width: W, height: H, frameRate: fps }, fastStart: 'in-memory' });
+    } else {
+      const { Muxer, ArrayBufferTarget } = window.WebMMuxer;
+      muxer = new Muxer({ target: new ArrayBufferTarget(), video: { codec: codec.mux, width: W, height: H, frameRate: fps } });
+    }
+    let err = null;
+    const encoder = new VideoEncoder({ output: (c, m) => muxer.addVideoChunk(c, m), error: (e) => { err = e; } });
+    encoder.configure(codec.cfg);
+    let n = 0;
+    for await (const _ of frames(ctx)) {
       if (err) throw err;
       const frame = new VideoFrame(canvas, { timestamp: Math.round((n * 1e6) / fps), duration: Math.round(1e6 / fps) });
       encoder.encode(frame, { keyFrame: n % (fps * 2) === 0 });
@@ -607,13 +634,42 @@ export async function exportReplayMp4(editor, pageIds, { mode = 'auto', speed = 
       if (n % 10 === 0) {
         onProgress(n, total);
         await new Promise((r) => setTimeout(r, 0));
-        if (isCancelled()) throw new Error('cancelled');
+        if (isCancelled()) { encoder.close(); throw new Error('cancelled'); }
       }
     }
+    await encoder.flush();
+    encoder.close();
+    muxer.finalize();
+    onProgress(total, total);
+    return { bytes: new Uint8Array(muxer.target.buffer), container: codec.container, codec: codec.mux, frames: n, width: W, height: H, seconds: n / fps };
   }
-  await encoder.flush();
-  encoder.close();
-  muxer.finalize();
+
+  // Fallback: record a canvas in real time (the video plays at the chosen speed).
+  const mime = recorderMime();
+  if (!mime) throw new Error('This browser cannot record video.');
+  const canvas = document.createElement('canvas');
+  canvas.width = W; canvas.height = H;
+  const ctx = canvas.getContext('2d');
+  const stream = canvas.captureStream(fps);
+  const rec = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
+  const chunks = [];
+  rec.ondataavailable = (e) => { if (e.data.size) chunks.push(e.data); };
+  const stopped = new Promise((r) => { rec.onstop = r; });
+  rec.start(1000);
+  let n = 0;
+  const t0 = performance.now();
+  for await (const _ of frames(ctx)) {
+    n++;
+    const due = t0 + (n * 1000) / fps;
+    await new Promise((r) => setTimeout(r, Math.max(0, due - performance.now())));
+    if (n % 10 === 0) { onProgress(n, total); if (isCancelled()) { rec.stop(); throw new Error('cancelled'); } }
+  }
+  rec.stop();
+  await stopped;
+  stream.getTracks().forEach((t) => t.stop());
+  const blob = new Blob(chunks, { type: mime });
   onProgress(total, total);
-  return { bytes: new Uint8Array(muxer.target.buffer), codec: codec.mux, frames: n, width: W, height: H, seconds: n / fps };
+  return { bytes: new Uint8Array(await blob.arrayBuffer()), container: mime.includes('mp4') ? 'mp4' : 'webm', codec: mime, frames: n, width: W, height: H, seconds: n / fps };
 }
+
+export const exportReplayMp4 = exportReplayVideo;

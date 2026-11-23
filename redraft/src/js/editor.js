@@ -66,6 +66,8 @@ export class Editor {
     this.workspaceColor = '#e8e8e4';
     this.dpr = window.devicePixelRatio || 1;
     this._raf = 0;
+    this.touches = new Map(); // active finger touches: pointerId -> { sp, start, t }
+    this.gesture = null;      // two/three-finger pan, pinch, tap
 
     new ResizeObserver(() => this.resize()).observe(stage);
     canvas.addEventListener('pointerdown', (e) => this.onPointerDown(e));
@@ -216,7 +218,18 @@ export class Editor {
     if (!this.thumbBgs.has(id)) {
       const a = this.assets.get(id);
       if (!a) return null;
-      this.thumbBgs.set(id, await createImageBitmap(new Blob([a.bytes], { type: a.mime }), { resizeWidth: 320, resizeQuality: 'medium' }));
+      const blob = new Blob([a.bytes], { type: a.mime });
+      let bmp;
+      try { bmp = await createImageBitmap(blob, { resizeWidth: 320, resizeQuality: 'medium' }); } catch { bmp = null; }
+      if (!bmp || bmp.width > 400) {
+        // Safari ignores/rejects resize options: shrink by hand so thumbnails stay small in memory.
+        const full = bmp || (await createImageBitmap(blob));
+        const c = new OffscreenCanvas(320, Math.max(1, Math.round((full.height * 320) / full.width)));
+        c.getContext('2d').drawImage(full, 0, 0, c.width, c.height);
+        full.close?.();
+        bmp = await createImageBitmap(c);
+      }
+      this.thumbBgs.set(id, bmp);
     }
     return this.thumbBgs.get(id);
   }
@@ -721,7 +734,80 @@ export class Editor {
   }
 
   // ------------------------------------------------------------ pointer input
+  // ------------------------------------------------------------ touch gestures
+  /** Returns true when the touch is consumed by a multi-finger gesture. */
+  touchDown(e) {
+    const sp = this.eventPoint(e);
+    this.touches.set(e.pointerId, { sp, start: sp, t: performance.now() });
+    try { this.canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (this.gesture) { this.gesture.max = Math.max(this.gesture.max, this.touches.size); return true; }
+    if (this.touches.size === 1) return !!this.drag; // a finger while the Pencil draws = palm: ignore
+    const d = this.drag;
+    if (d) {
+      if (d.pointerType !== 'touch') return true; // Pencil is drawing: palm rejection
+      if (performance.now() - d.tStart > 350) return true; // a long stroke in progress: treat as palm
+      this.cancelDrag();
+    }
+    const [a, b] = [...this.touches.values()];
+    this.gesture = {
+      c0: [(a.sp[0] + b.sp[0]) / 2, (a.sp[1] + b.sp[1]) / 2], d0: Math.max(10, dist(a.sp, b.sp)),
+      view0: { ...this.view }, t0: performance.now(), max: this.touches.size, moved: false,
+    };
+    this.hover = null;
+    return true;
+  }
+
+  touchMove(e) {
+    const t = this.touches.get(e.pointerId);
+    if (!t) return false;
+    t.sp = this.eventPoint(e);
+    const g = this.gesture;
+    if (!g) return false;
+    const [a, b] = [...this.touches.values()];
+    if (!b) return true;
+    const c = [(a.sp[0] + b.sp[0]) / 2, (a.sp[1] + b.sp[1]) / 2];
+    const d = Math.max(10, dist(a.sp, b.sp));
+    if (Math.abs(d - g.d0) > 12 || dist(c, g.c0) > 12) g.moved = true;
+    if (!g.moved) return true;
+    const v0 = g.view0;
+    const z = Math.max(0.03, Math.min(12, v0.zoom * (d / g.d0)));
+    const px = (g.c0[0] - v0.x) / v0.zoom, py = (g.c0[1] - v0.y) / v0.zoom;
+    this.view.zoom = z;
+    this.view.x = c[0] - px * z;
+    this.view.y = c[1] - py * z;
+    this.viewChanged();
+    return true;
+  }
+
+  /** Returns true when the lift belonged to a gesture. */
+  touchUp(e) {
+    if (!this.touches.has(e.pointerId)) return false;
+    this.touches.delete(e.pointerId);
+    const g = this.gesture;
+    if (!g) return false;
+    if (this.touches.size === 0) {
+      this.gesture = null;
+      const quick = !g.moved && performance.now() - g.t0 < 400;
+      if (quick && g.max === 2) { this.undo(); this.emit('gesture', 'undo'); }
+      else if (quick && g.max >= 3) { this.redo(); this.emit('gesture', 'redo'); }
+    }
+    return true;
+  }
+
+  /** Abandon the current drag without committing anything. */
+  cancelDrag() {
+    const d = this.drag;
+    if (!d) return;
+    if (d.kind === 'strokeErase') for (const [lid, ids] of d.hits) { ids.forEach((id) => this.hidden.delete(id)); this.invalidate(lid); }
+    if (d.kind === 'xform') { d.sel.forEach(({ obj }) => this.hidden.delete(obj.id)); new Set(d.sel.map((x) => x.layer.id)).forEach((id) => this.invalidate(id)); }
+    if (d.kind === 'textMove' && d.moved) { this.hidden.delete(d.hit.obj.id); this.invalidate(d.hit.layerId); }
+    this.drag = null;
+    this.live = null;
+    this.requestRender();
+  }
+
   onPointerDown(e) {
+    if (e.pointerType === 'touch' && this.touchDown(e)) return;
     if (!this.page || this.drag) return;
     const sp = this.eventPoint(e);
     if (this.textEditor) { this.closeTextEditor(); if (this.tool === 'text') return; }
@@ -760,14 +846,17 @@ export class Editor {
     } else if (t === 'text') {
       this.startText(p);
     }
+    if (this.drag) Object.assign(this.drag, { pointerType: e.pointerType, pointerId: e.pointerId, tStart: performance.now() });
     this.requestRender();
   }
 
   onPointerMove(e) {
+    if (e.pointerType === 'touch' && this.touchMove(e)) return;
     const sp = this.eventPoint(e);
-    this.hover = sp;
+    this.hover = e.pointerType === 'touch' ? null : sp;
     const d = this.drag;
     if (!d) { this.requestRender(); return; }
+    if (d.pointerId !== undefined && e.pointerId !== d.pointerId) return;
     const p = this.toPage(sp[0], sp[1]);
     switch (d.kind) {
       case 'pan':
@@ -801,8 +890,10 @@ export class Editor {
   }
 
   onPointerUp(e) {
+    if (e.pointerType === 'touch' && this.touchUp(e)) return;
     const d = this.drag;
     if (!d) return;
+    if (d.pointerId !== undefined && e.pointerId !== d.pointerId) return;
     const p = this.toPage(...this.eventPoint(e));
     try {
       switch (d.kind) {
@@ -863,13 +954,14 @@ export class Editor {
       size: s.size, opacity: t === 'eraser' || t === 'cover' ? 1 : s.opacity,
       paths: [[[p[0], p[1], 0]]],
     };
+    if (e.pointerType === 'pen' && e.pressure > 0) { obj.pressure = true; obj.paths[0][0].push(e.pressure); }
     const stab = this.stabilizerFor();
     stab.start(p);
     const now = performance.now();
     this.drag = {
       kind: 'stroke', obj, stab, t0: now, lastEvt: now, lastTick: now,
       stillSince: now, stillAt: sp, start: p, shift: e.shiftKey, raw: [p],
-      ruler: this.rulerEdgeFor(p, s.size), snapped: null,
+      ruler: this.rulerEdgeFor(p, s.size), snapped: null, pressure: e.pressure || 0.5,
     };
     if (this.drag.ruler) obj.paths[0][0] = this._rulerProject(p, this.drag.ruler, 0);
     this.live = { obj, layerIds, path: buildStrokePath(obj) };
@@ -882,7 +974,11 @@ export class Editor {
     const d = this.drag;
     const t = Math.round(performance.now() - d.t0);
     const path = d.obj.paths[0];
-    for (const q of pts) path.push(d.ruler ? this._rulerProject(q, d.ruler, t) : [q[0], q[1], t]);
+    for (const q of pts) {
+      const pt = d.ruler ? this._rulerProject(q, d.ruler, t) : [q[0], q[1], t];
+      if (d.obj.pressure) pt.push(+d.pressure.toFixed(3));
+      path.push(pt);
+    }
   }
 
   _strokeLoop() {
@@ -927,6 +1023,7 @@ export class Editor {
     const evts = e.getCoalescedEvents ? e.getCoalescedEvents() : [e];
     for (const ev of evts.length ? evts : [e]) {
       const q = this.toPage(...this.eventPoint(ev));
+      if (d.obj.pressure && ev.pressure > 0) d.pressure = ev.pressure;
       d.raw.push(q);
       const now = ev.timeStamp || performance.now();
       d.stab.move(q);

@@ -190,7 +190,7 @@ export function transformObj(o, m) {
     return {
       ...o,
       size: o.size * k,
-      paths: o.paths.map((path) => path.map((p) => { const q = applyMat(m, p); return p.length > 2 ? [q[0], q[1], p[2]] : q; })),
+      paths: o.paths.map((path) => path.map((p) => { const q = applyMat(m, p); return p.length > 2 ? [q[0], q[1], ...p.slice(2)] : q; })),
     };
   }
   if (o.type === 'text') {

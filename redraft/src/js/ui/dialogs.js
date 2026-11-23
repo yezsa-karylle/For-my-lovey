@@ -77,6 +77,7 @@ export function initTooltips() {
   let tip = null, timer = 0;
   const hide = () => { clearTimeout(timer); tip?.remove(); tip = null; };
   document.addEventListener('pointerover', (e) => {
+    if (e.pointerType === 'touch' || e.pointerType === 'pen') { hide(); return; }
     const el = e.target.closest?.('[data-tip]');
     hide();
     if (!el) return;

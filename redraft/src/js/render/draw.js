@@ -41,12 +41,13 @@ export function buildStrokePath(obj, paths = obj.paths) {
   const crisp = !!obj.shape;
   for (const pts of paths) {
     if (!pts.length) continue;
-    const outline = getStroke(pts.map((p) => [p[0], p[1]]), {
+    const real = obj.pressure && !crisp; // Apple Pencil / pen pressure recorded per point
+    const outline = getStroke(pts.map((p) => (real ? [p[0], p[1], p[3] ?? 0.5] : [p[0], p[1]])), {
       size: obj.size,
-      thinning: crisp ? 0 : b.thinning,
+      thinning: crisp ? 0 : real ? Math.max(b.thinning, 0.45) : b.thinning,
       smoothing: b.smoothing,
       streamline: crisp ? 0 : b.streamline,
-      simulatePressure: !crisp && b.thinning > 0,
+      simulatePressure: !real && !crisp && b.thinning > 0,
       start: { taper: crisp ? 0 : obj.size * b.taper, cap: true },
       end: { taper: crisp ? 0 : obj.size * b.taper, cap: true },
       last: true,

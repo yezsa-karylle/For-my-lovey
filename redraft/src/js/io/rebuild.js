@@ -223,7 +223,7 @@ export async function getOcr(logger) {
   if (ocrWorker) return ocrWorker;
   const T = window.Tesseract;
   if (!T) throw new Error('OCR engine not available');
-  const abs = (p) => new URL(p, location.href).href;
+  const abs = (p) => new URL(p, document.baseURI).href;
   ocrWorker = await T.createWorker('eng', 1, {
     workerPath: abs('../node_modules/tesseract.js/dist/worker.min.js'),
     corePath: abs('../node_modules/tesseract.js-core'),
@@ -623,7 +623,10 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
     }
     sg.putImageData(img, 0, 0);
     const c = document.createElement('canvas');
-    c.width = Math.ceil(w0 * SCALE); c.height = Math.ceil(h0 * SCALE);
+    // iOS Safari refuses canvases above ~16.7 million pixels.
+    const k = Math.min(SCALE, Math.sqrt(16e6 / (w0 * h0)));
+    c.width = Math.ceil(w0 * k); c.height = Math.ceil(h0 * k);
+    c.ocrScale = k;
     const g = c.getContext('2d');
     g.fillStyle = '#fff'; g.fillRect(0, 0, c.width, c.height);
     g.imageSmoothingQuality = 'high';
@@ -648,11 +651,12 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
       const x1 = side === 0 ? Math.floor(midX - (divider ? divider.w / 2 : 0)) : W;
       const img = clean(x0, 0, x1, H, items);
       const res = await ocrImage(img, 4);
+      const S = img.ocrScale || SCALE;
       for (const r of items) r.words = [];
       for (const wd of res.words) {
         const t = wd.text.trim();
         if (!t) continue;
-        const bx0 = wd.bbox.x0 / SCALE + x0, bx1 = wd.bbox.x1 / SCALE + x0, by0 = wd.bbox.y0 / SCALE, by1 = wd.bbox.y1 / SCALE;
+        const bx0 = wd.bbox.x0 / S + x0, bx1 = wd.bbox.x1 / S + x0, by0 = wd.bbox.y0 / S, by1 = wd.bbox.y1 / S;
         const cxw = (bx0 + bx1) / 2, cyw = (by0 + by1) / 2;
         let best = null, bestD = Infinity;
         for (const r of items) {
@@ -675,7 +679,7 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
       const img = clean(cx0, cy0, Math.min(W, r.x1 + pad), Math.min(H, r.y1 + pad), [r]);
       const res = await ocrImage(img, 7);
       const t = cleanOcrText(res.text || '');
-      const boxedWords = res.words.filter((w) => w.text.trim()).map((w) => ({ text: w.text.trim(), conf: w.confidence, x0: w.bbox.x0 / SCALE + cx0, x1: w.bbox.x1 / SCALE + cx0 }));
+      const boxedWords = res.words.filter((w) => w.text.trim()).map((w) => ({ text: w.text.trim(), conf: w.confidence, x0: w.bbox.x0 / (img.ocrScale || SCALE) + cx0, x1: w.bbox.x1 / (img.ocrScale || SCALE) + cx0 }));
       if (t && res.confidence >= Math.max(30, ...r.words.map((w) => w.conf), 0) - 5) {
         r.words = boxedWords.length ? boxedWords : [{ text: t, conf: res.confidence, x0: r.x0, x1: r.x1 }];
       }

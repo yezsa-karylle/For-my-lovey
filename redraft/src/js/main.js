@@ -7,7 +7,7 @@ import { closePicker } from './ui/colorpicker.js';
 import { importFile, extOf, baseName } from './io/importer.js';
 import { serializeProject, loadProject } from './io/projectFile.js';
 import { exportPdf, exportPng } from './io/exporter.js';
-import { exportReplayMp4, ReplayEngine, pickCodec } from './io/replay.js';
+import { exportReplayVideo, ReplayEngine, pickCodec } from './io/replay.js';
 import { analyzePage, rebuildOp } from './io/rebuild.js';
 import { loadHandFonts, resetHandCache } from './render/hand.js';
 import { openPlayer, playerOpen } from './ui/player.js';
@@ -16,6 +16,7 @@ import { resetTextCache } from './render/draw.js';
 void ReplayEngine;
 
 const api = window.api;
+const WEB = !!api.web; // browser / PWA build (projects live in IndexedDB, exports go to the share sheet)
 
 const app = {
   path: null, // project file on disk
@@ -65,7 +66,25 @@ function addRecent(path, title) {
   list.unshift({ path, title, t: Date.now() });
   localStorage.setItem('redraft.recent', JSON.stringify(list.slice(0, 8)));
 }
+async function renderRecentWeb() {
+  const el = $('#recent');
+  const list = await api.listProjects();
+  if (!list.length) { el.innerHTML = '<p class="hint">Projects are saved automatically in this browser as you work.</p>'; return; }
+  el.innerHTML = '<h4>Your projects (saved on this device)</h4>';
+  for (const r of list) {
+    const row = h(`<div class="recent-row"><button class="open"><span>${esc(r.title)}</span><span class="path">${r.pages} page${r.pages === 1 ? '' : 's'} · ${new Date(r.updated).toLocaleDateString()} · ${(r.size / 1e6).toFixed(1)} MB</span></button><button class="btn icon danger" data-tip="Delete from this device">${icon('trash')}</button></div>`);
+    row.querySelector('.open').onclick = () => openPaths([r.path + '.redraft']);
+    row.querySelector('.danger').onclick = async () => {
+      if (!(await confirmDialog('Delete project?', `"${r.title}" will be removed from this device. Download it first (Export → Download project file) if you want a copy.`, 'Delete', true))) return;
+      await api.deleteProject(r.path);
+      renderRecent();
+    };
+    el.appendChild(row);
+  }
+}
+
 function renderRecent() {
+  if (WEB) return renderRecentWeb();
   const list = recentList();
   const el = $('#recent');
   if (!list.length) { el.innerHTML = ''; return; }
@@ -102,7 +121,7 @@ function updateTitle() {
   const p = editor.project;
   $('#doc-title').textContent = p ? p.title : '';
   api.setTitle(p ? `${p.title} — Redraft` : 'Redraft');
-  $('#st-path').textContent = app.path && !app.autosavePath ? app.path : app.autosavePath ? 'Autosaving to app folder — press Ctrl+S to choose a location' : '';
+  $('#st-path').textContent = WEB ? (app.path ? 'Autosaved on this device' : '') : app.path && !app.autosavePath ? app.path : app.autosavePath ? 'Autosaving to app folder — press Ctrl+S to choose a location' : '';
 }
 
 function setSaveState(text, err = false) {
@@ -142,13 +161,13 @@ async function openPaths(paths) {
       res.bitmaps.forEach((v, k) => bitmaps.set(k, v));
     }
     project.initial = { pages: clone(project.pages) };
-    const target = await uniquePath(dirOf(paths[0]), baseName(paths[0]), 'redraft');
+    const target = WEB ? 'idb:' + project.id : await uniquePath(dirOf(paths[0]), baseName(paths[0]), 'redraft');
     pr.close();
     setDoc(project, assets, bitmaps, target);
     app.dirty = true;
     await saveNow();
     addRecent(target, project.title);
-    toast(`Opened ${project.pages.length} page${project.pages.length > 1 ? 's' : ''}. Autosaving to ${baseName(target)}.redraft next to your file.`, { ms: 4500 });
+    toast(`Opened ${project.pages.length} page${project.pages.length > 1 ? 's' : ''}. ${WEB ? 'Changes autosave on this device.' : `Autosaving to ${baseName(target)}.redraft next to your file.`}`, { ms: 4500 });
     if (!app.noRebuildPrompt) offerRebuild();
   } catch (e) {
     pr.close();
@@ -159,12 +178,16 @@ async function openPaths(paths) {
 
 async function openProjectFile(path) {
   if (!(await confirmLeave())) return;
+  if (WEB && path.startsWith('idb:')) path = path.replace(/\.redraft$/, '');
   const pr = progressModal('Opening project');
   try {
     const { project, assets } = await loadProject(await api.readFile(path));
     pr.close();
-    setDoc(project, assets, new Map(), path);
-    addRecent(path, project.title);
+    // In the browser, an opened project file is copied into this device's storage.
+    const target = WEB ? 'idb:' + project.id : path;
+    setDoc(project, assets, new Map(), target);
+    if (WEB && !path.startsWith('idb:')) { app.dirty = true; await saveNow(); }
+    addRecent(target, project.title);
   } catch (e) {
     pr.close();
     console.error(e);
@@ -177,8 +200,8 @@ async function newNotebook() {
   const project = newProject('Grid notebook');
   project.pages.push(newGridPage(200));
   project.initial = { pages: clone(project.pages) };
-  const p = `${app.info.userData}${app.info.sep}Autosave${app.info.sep}${project.id}.redraft`;
-  setDoc(project, new Map(), new Map(), p, true);
+  if (WEB) setDoc(project, new Map(), new Map(), 'idb:' + project.id, false);
+  else setDoc(project, new Map(), new Map(), `${app.info.userData}${app.info.sep}Autosave${app.info.sep}${project.id}.redraft`, true);
   app.dirty = true;
   saveSoon();
 }
@@ -211,7 +234,7 @@ async function insertFiles() {
 app.markDirty = () => { app.dirty = true; saveSoon(); };
 
 let saveTimer = 0;
-function saveSoon(ms = 1500) {
+function saveSoon(ms = WEB ? 900 : 1500) {
   if (!editor.project) return;
   setSaveState('Unsaved changes');
   clearTimeout(saveTimer);
@@ -228,7 +251,7 @@ async function saveNow() {
   app.savePromise = (async () => {
     try {
       const bytes = await serializeProject(editor.project, editor.assets);
-      await api.writeFile(app.path, bytes);
+      await api.writeFile(app.path, bytes, { title: editor.project.title, pages: editor.project.pages.length });
       app.lastError = null;
       setSaveState(app.autosavePath ? 'Autosaved (not yet named)' : 'Saved');
     } catch (e) {
@@ -246,6 +269,12 @@ async function saveNow() {
 
 async function saveAs() {
   if (!editor.project) return;
+  if (WEB) {
+    // Browser: hand over a .redraft file (to Files, AirDrop, the Windows app...).
+    await saveNow();
+    await api.writeFile(`download:${editor.project.title}.redraft`, await serializeProject(editor.project, editor.assets));
+    return;
+  }
   const def = app.path && !app.autosavePath ? app.path : `${app.info.documents}${app.info.sep}${editor.project.title}.redraft`;
   const p = await api.saveDialog('project', def);
   if (!p) return;
@@ -263,11 +292,11 @@ async function save() {
   if (!editor.project) return;
   if (app.autosavePath) return saveAs();
   await saveNow();
-  toast('Saved');
+  toast(WEB ? 'Saved on this device' : 'Saved');
 }
 
 // ------------------------------------------------------------ export
-function exportBase() { return app.path && !app.autosavePath ? dirOf(app.path) + app.info.sep + editor.project.title : `${app.info.documents}${app.info.sep}${editor.project.title}`; }
+function exportBase() { if (WEB) return editor.project.title; return app.path && !app.autosavePath ? dirOf(app.path) + app.info.sep + editor.project.title : `${app.info.documents}${app.info.sep}${editor.project.title}`; }
 
 function exportDialog(kind) {
   if (!editor.project) return;
@@ -299,7 +328,7 @@ async function doExportPdf(pages, dpi, target) {
     const bytes = await exportPdf(editor, pages, { dpi, onProgress: (d, t, l) => pr.set(d, t, l) });
     await api.writeFile(p, bytes);
     pr.close();
-    toast('PDF exported', { action: { label: 'Show in folder', run: () => api.showInFolder(p) } });
+    toast('PDF exported', WEB ? {} : { action: { label: 'Show in folder', run: () => api.showInFolder(p) } });
   } catch (e) {
     pr.close();
     console.error(e);
@@ -315,6 +344,16 @@ async function doExportPng(pages, dpi, target) {
   if (!p) return;
   const pr = progressModal('Exporting PNG');
   try {
+    if (WEB && !single) {
+      const zip = new window.JSZip();
+      for (const [i, page] of pages.entries()) {
+        pr.set(i, pages.length, `Rendering page ${idx(page)}`);
+        zip.file(`${editor.project.title}-p${String(idx(page)).padStart(2, '0')}.png`, await exportPng(editor, page, { dpi }), { compression: 'STORE' });
+      }
+      await api.writeFile(`download:${editor.project.title} (PNG pages).zip`, await zip.generateAsync({ type: 'uint8array' }));
+      pr.close();
+      return;
+    }
     const stem = p.replace(/\.png$/i, '');
     for (const [i, page] of pages.entries()) {
       pr.set(i, pages.length, `Rendering page ${idx(page)}`);
@@ -322,7 +361,7 @@ async function doExportPng(pages, dpi, target) {
       await api.writeFile(single ? (p.endsWith('.png') ? p : p + '.png') : `${stem}-p${String(idx(page)).padStart(2, '0')}.png`, bytes);
     }
     pr.close();
-    toast(single ? 'PNG exported' : `${pages.length} PNGs exported`, { action: { label: 'Show in folder', run: () => api.showInFolder(p) } });
+    toast(single ? 'PNG exported' : `${pages.length} PNGs exported`, WEB ? {} : { action: { label: 'Show in folder', run: () => api.showInFolder(p) } });
   } catch (e) {
     pr.close();
     console.error(e);
@@ -388,7 +427,7 @@ function openReplay() {
 app.replayExportDialog = ({ pageId = editor.page.id, mode = 'auto', speed = 8 } = {}) => {
   const speeds = [1, 2, 4, 8, 16];
   const m = modal(`<h2>Export replay video</h2>
-    <p class="sub">MP4, 1080p at 30 frames per second, in fast forward.</p>
+    <p class="sub">1080p at 30 frames per second, in fast forward. MP4 where your device can make it, otherwise WebM.</p>
     <div class="row"><label>Pages</label><div class="seg" data-pages><button data-v="one" class="on">This page</button><button data-v="all">All ${editor.project.pages.length} pages</button></div></div>
     <div class="row"><label>Content</label><div class="seg" data-mode><button data-v="auto" class="${mode === 'auto' ? 'on' : ''}">Write the page</button><button data-v="history" class="${mode === 'history' ? 'on' : ''}">Page + my edits</button></div></div>
     <div class="row"><label>Format</label><div class="seg" data-format><button data-v="landscape" class="on">1920×1080 · follow pen</button><button data-v="portrait">1080×1920 · whole page</button></div></div>
@@ -412,20 +451,23 @@ app.replayExportDialog = ({ pageId = editor.page.id, mode = 'auto', speed = 8 } 
 };
 
 async function doExportReplay(opts, target) {
-  const p = target || (await api.saveDialog('mp4', exportBase() + ' replay.mp4'));
-  if (!p) return null;
+  // On the desktop the save location is chosen first; in the browser the file is offered when ready.
+  let p = target || (WEB ? null : await api.saveDialog('mp4', exportBase() + ' replay.mp4'));
+  if (!p && !WEB) return null;
   const pr = progressModal('Rendering replay video');
   pr.cancellable();
   try {
-    const res = await exportReplayMp4(editor, opts.pageIds || [editor.page.id], {
+    const res = await exportReplayVideo(editor, opts.pageIds || [editor.page.id], {
       ...opts,
       onProgress: (d, t) => pr.set(d, t, `Frame ${d} of ${t}`),
       isCancelled: () => pr.cancelled,
     });
+    if (!p) p = `download:${exportBase()} replay.${res.container}`;
+    else if (res.container !== 'mp4') p = p.replace(/\.mp4$/i, '.' + res.container);
     await api.writeFile(p, res.bytes);
     pr.close();
-    toast(`Replay saved (${Math.round(res.seconds)} s, ${res.width}×${res.height})`, { action: { label: 'Show in folder', run: () => api.showInFolder(p) } });
-    return res;
+    toast(`Replay saved as ${res.container.toUpperCase()} (${Math.round(res.seconds)} s, ${res.width}×${res.height})`, WEB ? {} : { action: { label: 'Show in folder', run: () => api.showInFolder(p) } });
+    return { ...res, path: p };
   } catch (e) {
     pr.close();
     if (e.message !== 'cancelled') { console.error(e); toast('Replay failed: ' + e.message, { ms: 6000 }); }
@@ -527,7 +569,13 @@ const commands = {
   addGridPage,
   duplicatePage,
   deletePage,
+  togglePages: () => { $('#app').classList.remove('panel-open'); $('#app').classList.toggle('pages-open'); },
+  togglePanel: () => { $('#app').classList.remove('pages-open'); $('#app').classList.toggle('panel-open'); },
 };
+// Phone drawers close when you go back to the page.
+$('#stage').addEventListener('pointerdown', () => $('#app').classList.remove('pages-open', 'panel-open'), true);
+editor.on('page', () => $('#app').classList.remove('pages-open'));
+editor.on('gesture', (g) => toast(g === 'undo' ? 'Undo' : 'Redo', { ms: 900 }));
 app.commands = commands;
 app.doExportPdf = doExportPdf;
 app.doExportPng = doExportPng;
