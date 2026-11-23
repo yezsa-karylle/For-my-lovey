@@ -1,0 +1,105 @@
+<!doctype html>
+<html lang="en" data-theme="light">
+<head>
+  <meta charset="utf-8">
+  <base href="src/">
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#17171a">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Redraft">
+  <link rel="manifest" href="../manifest.webmanifest">
+  <link rel="icon" type="image/png" href="../icons/icon-192.png">
+  <link rel="apple-touch-icon" href="../icons/apple-touch-icon.png">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob: data:; manifest-src 'self'; media-src 'self' blob:">
+  <title>Redraft</title>
+  <link rel="stylesheet" href="fonts.css">
+  <link rel="stylesheet" href="styles.css">
+  <script src="../node_modules/pdfjs-dist/build/pdf.min.js"></script>
+  <script src="../node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
+  <script src="../node_modules/jszip/dist/jszip.min.js"></script>
+  <script src="../node_modules/mp4-muxer/build/mp4-muxer.js"></script>
+  <script src="../node_modules/webm-muxer/build/webm-muxer.js"></script>
+  <script src="../node_modules/opentype.js/dist/opentype.min.js"></script>
+  <script src="../node_modules/tesseract.js/dist/tesseract.min.js"></script>
+  <script type="module" src="js/web-entry.js"></script>
+</head>
+<body>
+<div id="app" class="no-doc at-home">
+  <header class="topbar">
+    <div class="tb-left">
+      <button class="btn icon mobile-only" data-cmd="togglePages" data-tip="Pages"><span data-icon="layers"></span></button>
+      <button class="btn home-btn" data-cmd="home" data-tip="Back to all notebooks|Ctrl+Shift+H"><span data-icon="back"></span><span class="brand-mark" data-icon="mark"></span><span class="lbl">Home</span></button>
+      <span class="sep"></span>
+      <button class="btn" data-cmd="open" data-tip="Open PDF, image or project|Ctrl+O"><span data-icon="folder"></span>Open</button>
+      <button class="btn" data-cmd="save" data-tip="Save project|Ctrl+S"><span data-icon="save"></span>Save</button>
+      <div class="menu-wrap">
+        <button class="btn" data-menu="export-menu"><span data-icon="download"></span>Export</button>
+        <div class="menu" id="export-menu">
+          <button data-cmd="exportPdf"><span data-icon="file"></span>PDF (all pages)<span class="k">Ctrl+E</span></button>
+          <button data-cmd="exportPng"><span data-icon="image"></span>PNG (this page)<span class="k">Ctrl+Shift+E</span></button>
+          <button data-cmd="exportPngAll"><span data-icon="image"></span>PNG (every page)</button>
+          <hr>
+          <button data-cmd="exportReplay"><span data-icon="play"></span>Replay video (MP4)…</button>
+          <hr>
+          <button data-cmd="saveAs"><span data-icon="save"></span>Save project as…<span class="k">Ctrl+Shift+S</span></button>
+        </div>
+      </div>
+      <span class="sep"></span>
+      <button class="btn" data-cmd="rebuildPage" data-tip="Rebuild this scanned page as editable text, highlights, boxes and sketches|Ctrl+Shift+T"><span data-icon="wand"></span>Make editable</button>
+      <button class="btn" data-cmd="replay" data-tip="Watch the page being written; scrub, change speed, export MP4|Ctrl+Shift+R"><span data-icon="play"></span>Replay</button>
+    </div>
+    <div class="tb-center"><span id="doc-title"></span><span id="save-state"></span></div>
+    <div class="tb-right">
+      <button class="btn icon" data-cmd="undo" data-tip="Undo|Ctrl+Z"><span data-icon="undo"></span></button>
+      <button class="btn icon" data-cmd="redo" data-tip="Redo|Ctrl+Y"><span data-icon="redo"></span></button>
+      <span class="sep"></span>
+      <div class="zoom-group">
+        <button class="btn icon" data-cmd="zoomOut" data-tip="Zoom out|Ctrl+−"><span data-icon="minus"></span></button>
+        <button class="btn" id="zoom-label" data-cmd="zoom100" data-tip="Actual size|Ctrl+1">100%</button>
+        <button class="btn icon" data-cmd="zoomIn" data-tip="Zoom in|Ctrl+="><span data-icon="plus"></span></button>
+        <button class="btn icon" data-cmd="fit" data-tip="Fit page|Ctrl+0"><span data-icon="fit"></span></button>
+      </div>
+      <span class="sep"></span>
+      <button class="btn icon" data-cmd="theme" data-tip="Dark / light|Ctrl+Shift+L"><span id="theme-icon" data-icon="moon"></span></button>
+      <button class="btn icon desktop-only" data-cmd="help" data-tip="Keyboard shortcuts|F1"><span data-icon="help"></span></button>
+      <button class="btn icon mobile-only" data-cmd="togglePanel" data-tip="Tool, colour and layers"><span data-icon="sliders"></span></button>
+    </div>
+  </header>
+
+  <div class="main">
+    <aside class="pages-panel">
+      <div class="panel-head">Pages <span id="page-count"></span></div>
+      <div id="page-list"></div>
+      <div class="panel-foot">
+        <button class="btn icon" data-cmd="addGridPage" data-tip="New grid-paper page|Ctrl+N"><span data-icon="grid"></span></button>
+        <button class="btn icon" data-cmd="duplicatePage" data-tip="Duplicate page|Ctrl+Shift+D"><span data-icon="dup"></span></button>
+        <button class="btn icon" data-cmd="insertFiles" data-tip="Insert PDF/image pages|Ctrl+Shift+O"><span data-icon="image"></span></button>
+        <button class="btn icon danger" data-cmd="deletePage" data-tip="Delete page|Ctrl+Shift+Del"><span data-icon="trash"></span></button>
+      </div>
+    </aside>
+
+    <section id="stage">
+      <canvas id="view"></canvas>
+      <nav class="toolbar" id="toolbar"></nav>
+      <div class="drop-hint">Drop PDF or images to open</div>
+    </section>
+
+    <aside class="side-panel" id="side-panel">
+      <section class="card" id="tool-card" data-keeps-text tabindex="-1"></section>
+      <section class="card" id="color-card" data-keeps-text tabindex="-1"></section>
+      <section class="card" id="layers-card"></section>
+    </aside>
+  </div>
+
+  <footer class="statusbar">
+    <span id="st-page"></span><span id="st-zoom"></span><span class="grow" id="st-hint"></span><span id="st-path"></span>
+  </footer>
+</div>
+<div id="home" class="show"></div>
+<div id="popover-root"></div>
+<div id="modal-root"></div>
+<div id="toasts"></div>
+</body>
+</html>
