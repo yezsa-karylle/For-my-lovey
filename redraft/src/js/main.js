@@ -385,19 +385,41 @@ async function rebuildPages(pages, { quiet = false } = {}) {
   const pr = progressModal('Making notes editable');
   pr.cancellable();
   const stats = [];
+  const docSpacing = []; // letter-spacing measurements shared by all pages of this run
   try {
+    // Pass 1: read every page (OCR), pooling the letter-spacing measurements.
+    const done = [];
     for (const [k, page] of todo.entries()) {
       if (pr.cancelled) break;
       const no = editor.project.pages.indexOf(page) + 1;
       const bmp = await editor.scanBitmap(page);
+      const ocrMemo = new Map();
       const res = await analyzePage(bmp, page.w, page.h, {
-        onProgress: (label) => pr.set(k + 0.5, todo.length, `Page ${no}: ${label}`),
+        onProgress: (label) => pr.set(k + 0.5, todo.length * 1.15, `Page ${no}: ${label}`),
         textItems: page.pdfText || null,
+        docSpacing,
+        ocrMemo,
       });
-      const live = editor.project.pages.find((p) => p.id === page.id);
-      editor.commit(rebuildOp(live, res), { rebuild: true, page: page.id });
-      stats.push({ page: no, ...res.stats });
-      pr.set(k + 1, todo.length, `Page ${no} done`);
+      done.push({ page, no, res, ocrMemo }); // (bitmaps are re-fetched in pass 2: the cache may close them)
+      pr.set(k + 1, todo.length * 1.15, `Page ${no} read`);
+    }
+    // Pass 2: lay every page out again with the document's spacing and vocabulary (OCR reused).
+    if (docSpacing.length >= 2 && done.length > 1) {
+      const sorted = docSpacing.slice().sort((a, b) => a - b);
+      let final = +Math.max(0.65, Math.min(1.1, sorted[Math.floor(sorted.length / 2)])).toFixed(3);
+      if (Math.abs(final - 0.86) < 0.05) final = 0.86;
+      for (const d of done) {
+        if (pr.cancelled) break;
+        // Every page is laid out again: by now the spacing and the word list of the whole document are known.
+        pr.set(todo.length, todo.length * 1.15, `Matching handwriting on page ${d.no}`);
+        d.res = await analyzePage(await editor.scanBitmap(d.page), d.page.w, d.page.h, { textItems: d.page.pdfText || null, fontHint: d.res.stats.font, spacing: final, ocrMemo: d.ocrMemo });
+      }
+    }
+    for (const d of done) {
+      for (const a of d.res.assets || []) editor.assets.set(a.id, { mime: a.mime, bytes: a.bytes });
+      const live = editor.project.pages.find((p) => p.id === d.page.id);
+      editor.commit(rebuildOp(live, d.res), { rebuild: true, page: d.page.id });
+      stats.push({ page: d.no, ...d.res.stats });
     }
   } catch (e) {
     console.error(e);

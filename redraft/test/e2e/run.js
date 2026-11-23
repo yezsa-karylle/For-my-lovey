@@ -646,6 +646,66 @@ await step('edits are recorded with timestamps and replay letter by letter, with
   await win.keyboard.press('Escape');
 });
 
+await step('letter eraser: rub out letters, the rest stays exactly in place and editable', async () => {
+  const textLayer = await ed(() => window.__editor.page.layers.find((l) => l.name === 'Text').id);
+  await ed((id) => window.__editor.setActiveLayer(id), textLayer);
+  const t = await ed(() => window.__editor.layer.objects.find((o) => /density/.test(o.text)));
+  // Page boxes of every letter before erasing.
+  const boxes = (ids) => ed(async (ids) => {
+    const { layoutHand } = await import('./js/render/hand.js');
+    const e = window.__editor, out = {};
+    for (const o of e.layer.objects.filter((x) => ids.includes(x.id) || (x.i0 !== undefined && x.seed === ids.seed))) {
+      const L = layoutHand(o);
+      for (const g of L.glyphs) if (g.box) out[(o.i0 || 0) + g.i] = [+(o.x + g.box.x0).toFixed(2), +(o.y + g.box.y0).toFixed(2), +(o.x + g.box.x1).toFixed(2)];
+    }
+    return out;
+  }, ids);
+  const before = await boxes([t.id]);
+  // Choose letters 10..13 and swipe over their centre.
+  const mid = await ed(async (id) => {
+    const { layoutHand } = await import('./js/render/hand.js');
+    const o = window.__editor.layer.objects.find((x) => x.id === id);
+    const g = layoutHand(o).glyphs.filter((x) => x.box && x.i >= 10 && x.i <= 12);
+    return [o.x + (g[0].box.x0 + g[0].box.x1) / 2, o.x + (g[g.length - 1].box.x0 + g[g.length - 1].box.x1) / 2, o.y - o.size * 0.25];
+  }, t.id);
+  await win.keyboard.press('e');
+  await ed(() => { const s = window.__editor.settings.tools.eraser; s.mode = 'stroke'; s.size = 8; window.__editor.emit('settings'); });
+  const [x0, y0] = await toScreen(mid[0], mid[2]);
+  const [x1] = await toScreen(mid[1], mid[2]);
+  await win.mouse.move(x0, y0); await win.mouse.down();
+  await win.mouse.move(x1, y0, { steps: 6 }); await win.mouse.up();
+  const after = await ed((seed) => window.__editor.layer.objects.filter((o) => o.seed === seed).map((o) => ({ id: o.id, text: o.text, i0: o.i0 || 0 })), t.seed);
+  assert.equal(after.length, 2, 'line split into two editable pieces: ' + JSON.stringify(after));
+  const erased = t.text.length - after.reduce((n, a) => n + a.text.length, 0) - (t.text.split(' ').length - after.reduce((n, a) => n + a.text.split(' ').length, 0));
+  assert.ok(erased >= 2, 'some letters erased');
+  const now = await ed(async (seed) => {
+    const { layoutHand } = await import('./js/render/hand.js');
+    const out = {};
+    for (const o of window.__editor.layer.objects.filter((x) => x.seed === seed)) for (const g of layoutHand(o).glyphs) if (g.box) out[(o.i0 || 0) + g.i] = [+(o.x + g.box.x0).toFixed(2), +(o.y + g.box.y0).toFixed(2), +(o.x + g.box.x1).toFixed(2)];
+    return out;
+  }, t.seed);
+  for (const [i, b] of Object.entries(now)) {
+    assert.ok(before[i], 'letter ' + i + ' existed before');
+    for (let k = 0; k < 3; k++) assert.ok(Math.abs(before[i][k] - b[k]) < 0.05, `letter ${i} moved: ${before[i]} -> ${b}`);
+  }
+  const entry = await ed(() => { const j = window.__editor.project.journal; return j[j.length - 1]; });
+  assert.ok(entry.letterErase && entry.letterErase[0].erased.length >= 2, 'erase recorded for replay');
+  const segKinds = await ed(async () => {
+    const { ReplayEngine } = await import('./js/io/replay.js');
+    const E = new ReplayEngine(window.__editor, window.__editor.page.id, { mode: 'history' });
+    return E.segs.filter((s) => s.kind === 'text' && s.acts.some((a) => a.type === 'erase')).length;
+  });
+  assert.equal(segKinds, 1, 'replay shows the letters being rubbed out');
+  // Undo puts the whole line back.
+  await win.keyboard.press('Control+z');
+  assert.equal(await ed((id) => window.__editor.layer.objects.filter((o) => o.id === id).length, t.id), 1);
+  await win.keyboard.press('Control+y');
+  await ed(() => { window.__editor.settings.tools.eraser.mode = 'brush'; });
+  await win.keyboard.press('Control+0');
+  await win.waitForTimeout(300);
+  await shot('12-letter-erase');
+});
+
 await step('theme toggle and help overlay', async () => {
   await win.keyboard.press('Control+Shift+l');
   assert.equal(await win.evaluate(() => document.documentElement.dataset.theme), 'dark');

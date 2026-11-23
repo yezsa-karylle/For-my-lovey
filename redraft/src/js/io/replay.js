@@ -7,10 +7,12 @@
 // The timeline is seekable (scrubber) and renders frames for the player and MP4.
 import { applyOp, clone, findLayer, opTargets } from '../core/model.js';
 import { bboxOfPoints } from '../core/geometry.js';
-import { drawObject, drawStroke, buildStrokePath, renderLayer, drawBackground, drawText } from '../render/draw.js';
+import { drawObject, drawStroke, buildStrokePath, renderLayer, drawBackground, drawText, drawImageObj, ensureImages } from '../render/draw.js';
 import { layoutHand } from '../render/hand.js';
 
 const flatten = (op) => (op.type === 'batch' ? op.ops.flatMap(flatten) : [op]);
+const boxOf = (o) => (o.type === 'image' ? { x: o.x, y: o.y, w: o.w, h: o.h } : o.type === 'text' ? { x: o.x, y: o.y - o.size, w: o.size * (o.text.length * 0.45 + 1), h: o.size * 1.4 } : bboxOfPoints(o.paths.flat(), o.size || 0));
+const revealSeg = (layerId, o, ops) => ({ kind: 'reveal', layer: layerId, obj: o, dur: Math.min(5000, Math.max(900, Math.sqrt(o.w * o.h) * 9)), ops });
 
 function mulberry(a) {
   return () => { a |= 0; a = (a + 0x6d2b79f5) | 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
@@ -102,7 +104,7 @@ function readingOrder(page) {
   const free = [];
   for (const it of others) {
     const o = it.o;
-    const b = bboxOfPoints(o.paths.flat());
+    const b = boxOf(o);
     if (!b) continue;
     let anchor = null;
     if (o.tool === 'highlighter' || o.kind === 'line') {
@@ -154,8 +156,8 @@ function autoSegments(B, page, rnd, { typos = 3 } = {}) {
     const { layer, o } = it;
     if (last) {
       const col = (x) => (x < divX ? 0 : 1);
-      const lx = last.type === 'text' ? last.x : bboxOfPoints(last.paths.flat()).x;
-      const ox = o.type === 'text' ? o.x : bboxOfPoints(o.paths.flat()).x;
+      const lx = boxOf(last).x;
+      const ox = boxOf(o).x;
       B.pause(col(lx) !== col(ox) ? 700 : o.type === 'text' && last.type === 'text' && Math.abs(o.y - last.y) > 5 ? 260 + rnd() * 200 : 140 + rnd() * 120);
     }
     const ops = [{ type: 'insObjs', page: page.id, layer: layer.id, objs: [o], indices: [Infinity] }];
@@ -176,6 +178,8 @@ function autoSegments(B, page, rnd, { typos = 3 } = {}) {
         if (acts[i].type === 'del') { const hold = { type: 'hold', t0: acts[i].t0, dur: 450, text: acts[i].before }; acts.splice(i, 0, hold); shift += 450; acts[i + 1].t0 += 450; i++; }
       }
       B.add({ kind: 'text', layer: layer.id, obj: o, acts, dur: dur + shift, ops });
+    } else if (o.type === 'image') {
+      B.add(revealSeg(layer.id, o, ops));
     } else if (o.type === 'stroke') {
       const speed = o.tool === 'highlighter' ? 950 : o.kind === 'dashbox' || o.kind === 'dashline' ? 700 : PEN_SPEED;
       B.add(strokeSeg(layer.id, o, { speed, ops }));
@@ -192,6 +196,22 @@ function journalSegments(B, entries, page, rnd) {
     const ops = flatten(e.op).filter((o) => o.page === page.id);
     if (!ops.length) continue;
     const opE = ops.length === 1 ? ops[0] : { type: 'batch', ops };
+    if (e.letterErase && !e.undo && !e.redo) {
+      // Letter eraser: rub out just those letters, then the line continues as its pieces.
+      for (const it of e.letterErase) {
+        const ops1 = [{ type: 'delObjs', page: page.id, layer: it.layer, objs: [it.obj], indices: [0] }];
+        if (it.pieces.length) ops1.push({ type: 'insObjs', page: page.id, layer: it.layer, objs: it.pieces, indices: it.pieces.map(() => Infinity) });
+        const dur = Math.max(260, it.erased.length * 110);
+        B.add({ kind: 'text', layer: it.layer, obj: it.obj, acts: [{ type: 'erase', t0: 0, dur, text: it.obj.text, idx: it.erased }], dur, ops: ops1, hide: [it.obj.id] });
+      }
+      const gone = new Set(e.letterErase.map((it) => it.obj.id));
+      const rest = ops.filter((o) => o.type === 'delObjs' && !o.objs.some((x) => gone.has(x.id)));
+      if (rest.length) {
+        const objs = rest.flatMap((d) => d.objs.map((o) => ({ layer: d.layer, o })));
+        B.add({ kind: 'wipe', objs, dur: Math.min(1600, 450 + objs.length * 90), ops: rest, hide: objs.map((x) => x.o.id) });
+      }
+      continue;
+    }
     const ins = ops.filter((o) => o.type === 'insObjs');
     const dels = ops.filter((o) => o.type === 'delObjs');
     const sets = ops.filter((o) => o.type === 'setObjs');
@@ -231,7 +251,8 @@ function journalSegments(B, entries, page, rnd) {
           const { acts, dur } = textActions([[0, ''], [0, o.text]], rnd, o.size);
           acts.forEach((a) => { a.dur /= 2.5; a.t0 /= 2.5; if (a.per) a.per = a.per.map((v) => v / 2.5); });
           B.add({ kind: 'text', layer: op.layer, obj: o, acts, dur: dur / 2.5, ops: one });
-        } else B.add({ kind: 'pause', dur: 60, ops: one });
+        } else if (o.type === 'image') B.add(revealSeg(op.layer, o, one));
+        else B.add({ kind: 'pause', dur: 60, ops: one });
       }));
       continue;
     }
@@ -318,6 +339,7 @@ export class ReplayRenderer {
 
   async prepare() {
     this.bmp = await this.editor.ensureBitmap(this.page);
+    await ensureImages([...this.engine.finalPage.layers.flatMap((l) => l.objects), ...this.engine.segs.filter((s) => s.obj).map((s) => s.obj)]);
     if (this.page.ref) this.refBmp = null;
   }
 
@@ -408,6 +430,11 @@ export class ReplayRenderer {
       if (!a) return null;
       const lt = Math.max(0, Math.min(a.dur, local - a.t0));
       if (a.type === 'hold') { drawText(g, seg.obj, a.text); return null; }
+      if (a.type === 'erase') {
+        const n = a.idx.length, f = (lt / a.dur) * n, k = Math.min(n - 1, Math.floor(f));
+        const cur = a.idx[k];
+        return drawText(g, seg.obj, a.text, { hideSet: new Set(a.idx.slice(0, k)), wipe: { from: cur, to: cur + 1, progress: Math.min(1, f - k) } });
+      }
       if (a.type === 'del') {
         return drawText(g, seg.obj, a.before, { wipe: { from: a.p, to: a.before.length - a.q, progress: lt / a.dur } });
       }
@@ -422,7 +449,7 @@ export class ReplayRenderer {
       const mine = seg.objs.filter((x) => x.layer === layerId);
       if (!mine.length) return null;
       const box = seg.box || (seg.box = seg.objs.reduce((b, x) => {
-        const bb = x.o.type === 'stroke' ? bboxOfPoints(x.o.paths.flat(), x.o.size) : { x: x.o.x - 4, y: x.o.y - x.o.size, w: x.o.size * (x.o.text.length * 0.45 + 1), h: x.o.size * 1.4 };
+        const bb = boxOf(x.o);
         if (!b) return bb;
         const x0 = Math.min(b.x, bb.x), y0 = Math.min(b.y, bb.y);
         return { x: x0, y: y0, w: Math.max(b.x + b.w, bb.x + bb.w) - x0, h: Math.max(b.y + b.h, bb.y + bb.h) - y0 };
@@ -435,6 +462,12 @@ export class ReplayRenderer {
       mine.forEach((x) => drawObject(g, x.o, env));
       g.restore();
       return { x: cut, y: box.y + box.h * (0.5 + 0.35 * Math.sin(f * Math.PI * 7)), eraser: true };
+    }
+    if (seg.kind === 'reveal' && seg.layer === layerId) {
+      // Diagram drawn in: revealed left to right with the pen moving up and down across it.
+      const o = seg.obj;
+      drawImageObj(g, o, { x: 0, y: 0, w: o.w * f, h: o.h });
+      return { x: o.x + o.w * f, y: o.y + o.h * (0.5 + 0.42 * Math.sin(f * Math.PI * 9)) };
     }
     if (seg.kind === 'fade') {
       for (const s of seg.sets) {
@@ -484,7 +517,7 @@ export class ReplayRenderer {
     for (const layer of page.layers) {
       if (!layer.visible) continue;
       let src = this._cache(layer, hide);
-      const active = (seg.kind === 'stroke' || seg.kind === 'text') ? seg.layer === layer.id
+      const active = (seg.kind === 'stroke' || seg.kind === 'text' || seg.kind === 'reveal') ? seg.layer === layer.id
         : seg.kind === 'wipe' ? seg.objs.some((x) => x.layer === layer.id)
           : seg.kind === 'fade' ? seg.sets.some((x) => x.layer === layer.id) : false;
       // Only an eraser stroke has to be composited inside its layer; everything else

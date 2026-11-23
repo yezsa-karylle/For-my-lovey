@@ -113,6 +113,8 @@ export function layoutHand(o, text = o.text) {
   const R = (r, a) => (r() * 2 - 1) * a * jit;
   const U = (r, a, b) => 1 + ((a + r() * (b - a)) - 1) * jit;
   const slope = R(line, 0.006), slant = R(line, 0.03);
+  // Pieces of a line split by the letter eraser keep their original letter shapes and slope.
+  const i0 = o.i0 || 0, xoff = o.xoff || 0;
   const glyphs = [];
   const k = o.sx || 1;
   let x = 0, y = 0, x0 = 0, lineNo = 0;
@@ -123,22 +125,23 @@ export function layoutHand(o, text = o.text) {
     const ch = text[i];
     if (ch === '\n') { lineNo++; y = lineNo * handLineHeight(o); x = 0; x0 = 0; glyphs.push({ i, ch, nl: true }); continue; }
     if (ch === ' ' || ch === '\t') {
-      const r = rngFor(seed, i * 3 + 1);
+      const r = rngFor(seed, (i + i0) * 3 + 1);
       x += o.size * (0.30 + r() * 0.25);
       glyphs.push({ i, ch, space: true, x });
       continue;
     }
     if (i === 0 || /\s/.test(text[i - 1])) {
-      const r = rngFor(seed, i * 3 + 2);
+      // A piece split off mid-word keeps the size/offset of the word it came from.
+      const r = rngFor(seed, (i === 0 && o.w0 !== undefined ? o.w0 : i + i0) * 3 + 2);
       wsize = o.size * U(r, 0.95, 1.05);
       wy = R(r, 1.5);
     }
-    const r = rngFor(seed, i * 3);
+    const r = rngFor(seed, (i + i0) * 3);
     const gd = glyphData(F, ch);
     const s = (wsize / upm) * U(r, 0.93, 1.07);
     const sx = s * U(r, 0.92, 1.06), sy = s * U(r, 0.94, 1.06);
     const rot = R(r, 0.045), shear = slant + R(r, 0.06);
-    const by = y + (x - x0) * slope + wy + R(r, 1.3);
+    const by = y + (x - x0 + (lineNo === 0 ? xoff : 0)) * slope + wy + R(r, 1.3);
     const waves = [0, 1, 2].map(() => [(1.5 + r() * 2.5) / upm, (1.5 + r() * 2.5) / upm, r() * 6.3, (0.015 + r() * 0.017) * upm * jit]);
     const inst = { i, ch, gd, x, by, sx, sy, rot, shear, waves, k };
     inst.map = (px, py) => {
@@ -166,7 +169,8 @@ export function layoutHand(o, text = o.text) {
       minX = Math.min(minX, gx0); maxX = Math.max(maxX, gx1); minY = Math.min(minY, gy0); maxY = Math.max(maxY, gy1);
     }
     glyphs.push(inst);
-    x += gd.adv * sx * (0.80 + r() * 0.12 * jit + (1 - jit) * 0.06) + R(r, 0.8);
+    // o.adv = average letter advance (0.86 in the notes engine; measured per document when rebuilding).
+    x += gd.adv * sx * (0.80 + r() * 0.12 * jit + (1 - jit) * 0.06) * ((o.adv ?? 0.86) / 0.86) + R(r, 0.8);
   }
   maxX = Math.max(maxX, x * k);
   const res = { glyphs, width: x * k, box: { x0: minX, y0: minY, x1: maxX, y1: maxY } };
@@ -185,13 +189,13 @@ export function measureHand(o) {
 }
 
 /** Predicted natural width of `text` at size 1 (used to infer sizes when rebuilding pages). */
-export function naturalWidth(font, weight, text) {
+export function naturalWidth(font, weight, text, adv = 0.86) {
   const F = fontFor({ font, weight });
   if (!F) return null;
   let w = 0;
   const words = text.split(/\s+/).filter(Boolean);
   words.forEach((word, wi) => {
-    for (const ch of word) w += (glyphData(F, ch).adv / F.upm) * 0.86;
+    for (const ch of word) w += (glyphData(F, ch).adv / F.upm) * adv;
     if (wi) w += 0.425;
   });
   return w;
@@ -225,6 +229,7 @@ function fillGlyph(ctx, g) {
  *   partial  - { index, progress, hideTo } letter at `index` is being written (0..1);
  *              letters after it (up to hideTo, default all) are hidden
  *   wipe     - { from, to, progress } letters in [from, to) are being erased (right to left)
+ *   hideSet  - Set of letter indices not to draw (already erased)
  * Returns the pen tip position in page coordinates (or null).
  */
 export function drawHand(ctx, o, opts = {}) {
@@ -242,6 +247,7 @@ export function drawHand(ctx, o, opts = {}) {
   const P = opts.partial, Wp = opts.wipe;
   for (const g of L.glyphs) {
     if (!g.path) continue;
+    if (opts.hideSet && opts.hideSet.has(g.i)) continue;
     if (P && g.i > P.index && g.i < (P.hideTo ?? Infinity)) continue;
     if (P && g.i === P.index) { tip = drawGlyphPartial(ctx, o, g, P.progress); continue; }
     if (Wp && g.i >= Wp.from && g.i < Wp.to) {

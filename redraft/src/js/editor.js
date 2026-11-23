@@ -5,13 +5,14 @@ import {
 } from './core/geometry.js';
 import { recognize, adjustShape, linePath, snapAngle } from './core/shapes.js';
 import {
-  uid, clone, findLayer, newLayer, opAddObjs, opDelObjs, opSetObjs, batch, objBBox, textCorners, transformObj, opTargets,
+  uid, clone, findLayer, newLayer, opAddObjs, opDelObjs, opSetObjs, batch, objBBox, textCorners, imageCorners, transformObj, opTargets,
 } from './core/model.js';
 import { History } from './core/history.js';
 import {
   drawObject, drawStroke, buildStrokePath, renderLayer, drawBackground, drawText, measureText, renderPageCanvas, textLayout, LINE_HEIGHT,
+  setImageSource, ensureImages,
 } from './render/draw.js';
-import { isHandFamily, handLineHeight } from './render/hand.js';
+import { isHandFamily, handLineHeight, layoutHand, handReady } from './render/hand.js';
 
 export const PAINT_TOOLS = ['pen', 'pencil', 'marker', 'highlighter'];
 export const TOOL_NAMES = {
@@ -66,6 +67,7 @@ export class Editor {
     this.workspaceColor = '#e8e8e4';
     this.dpr = window.devicePixelRatio || 1;
     this._raf = 0;
+    setImageSource((id) => this.assets.get(id), () => { this.invalidateAll(); this.emit('pages'); this.requestRender(); });
     this.touches = new Map(); // active finger touches: pointerId -> { sp, start, t }
     this.gesture = null;      // two/three-finger pan, pinch, tap
 
@@ -235,6 +237,7 @@ export class Editor {
   }
 
   async renderThumb(page, width = 240) {
+    await ensureImages(page.layers.flatMap((l) => l.objects));
     const bmp = (page.bg.kind === 'image' && this.bitmaps.get(page.bg.asset)) || (await this.thumbBg(page));
     return renderPageCanvas(page, bmp, width / page.w);
   }
@@ -465,6 +468,13 @@ export class Editor {
       this.requestRender();
     }
 
+    if (d && d.kind === 'strokeErase' && d.letters.size) {
+      ctx.save();
+      ctx.setTransform(...vt);
+      for (const it of d.letters.values()) drawText(ctx, it.obj, it.obj.text, { hideSet: it.set });
+      ctx.restore();
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+    }
     if (this.settings.markUnsure !== false) this.drawUnsureMarks(ctx);
     if (this.selection && !(d && d.kind === 'xform')) this.drawSelectionBox(ctx, accent);
 
@@ -680,7 +690,7 @@ export class Editor {
     if (t === this.tool && t === 'eraser') {
       const s = this.settings.tools.eraser;
       s.mode = s.mode === 'brush' ? 'stroke' : 'brush';
-      this.toast(s.mode === 'brush' ? 'Eraser: brush (rubs out pixels)' : 'Eraser: stroke (removes whole strokes)');
+      this.toast(s.mode === 'brush' ? 'Eraser: brush (rubs out ink)' : 'Eraser: strokes & letters (removes whole strokes, or just the letters you touch)');
     } else if (t === this.tool && t === 'cover') {
       const s = this.settings.tools.cover;
       s.mode = s.mode === 'brush' ? 'box' : 'brush';
@@ -806,7 +816,10 @@ export class Editor {
   cancelDrag() {
     const d = this.drag;
     if (!d) return;
-    if (d.kind === 'strokeErase') for (const [lid, ids] of d.hits) { ids.forEach((id) => this.hidden.delete(id)); this.invalidate(lid); }
+    if (d.kind === 'strokeErase') {
+      for (const [lid, ids] of d.hits) { ids.forEach((id) => this.hidden.delete(id)); this.invalidate(lid); }
+      for (const it of d.letters.values()) { this.hidden.delete(it.obj.id); this.invalidate(it.layerId); }
+    }
     if (d.kind === 'xform') { d.sel.forEach(({ obj }) => this.hidden.delete(obj.id)); new Set(d.sel.map((x) => x.layer.id)).forEach((id) => this.invalidate(id)); }
     if (d.kind === 'textMove' && d.moved) { this.hidden.delete(d.hit.obj.id); this.invalidate(d.hit.layerId); }
     this.drag = null;
@@ -1077,7 +1090,7 @@ export class Editor {
   startStrokeErase(p) {
     const s = this.settings.tools.eraser;
     const layers = s.allLayers ? this.page.layers.filter((l) => l.visible) : [this.layer];
-    this.drag = { kind: 'strokeErase', last: p, layers, hits: new Map() };
+    this.drag = { kind: 'strokeErase', last: p, layers, hits: new Map(), letters: new Map() };
     this.moveStrokeErase(p);
   }
 
@@ -1087,6 +1100,15 @@ export class Editor {
     for (const layer of d.layers) {
       let changed = false;
       for (const o of layer.objects) {
+        // Handwriting text: erase only the letters touched (Procreate-style), keep the rest in place.
+        if (this.letterErasable(o)) {
+          const idx = this.glyphsHit(o, d.last, p, r);
+          if (!idx.length) continue;
+          let it = d.letters.get(o.id);
+          if (!it) { it = { layerId: layer.id, obj: o, set: new Set() }; d.letters.set(o.id, it); this.hidden.add(o.id); changed = true; }
+          idx.forEach((i) => it.set.add(i));
+          continue;
+        }
         if (this.hidden.has(o.id)) continue;
         if (this.objHitsSegment(o, d.last, p, r)) {
           if (!d.hits.has(layer.id)) d.hits.set(layer.id, []);
@@ -1100,22 +1122,91 @@ export class Editor {
     d.last = p;
   }
 
+  letterErasable(o) {
+    return o.type === 'text' && o.hand && !o.text.includes('\n') && handReady(o);
+  }
+
+  /** Indices of the letters of hand text `o` touched by the eraser segment a→b (radius r). */
+  glyphsHit(o, a, b, r) {
+    const L = layoutHand(o);
+    if (!L) return [];
+    const c = Math.cos(-(o.rot || 0)), s = Math.sin(-(o.rot || 0));
+    const loc = (q) => { const dx = q[0] - o.x, dy = q[1] - o.y; return [dx * c - dy * s, dx * s + dy * c]; };
+    const A = loc(a), B = loc(b);
+    const n = Math.max(1, Math.ceil(dist(A, B) / Math.max(2, r / 2)));
+    const out = [];
+    for (const g of L.glyphs) {
+      if (!g.box) continue;
+      const bx = g.box;
+      for (let k = 0; k <= n; k++) {
+        const x = A[0] + ((B[0] - A[0]) * k) / n, y = A[1] + ((B[1] - A[1]) * k) / n;
+        if (x >= bx.x0 - r && x <= bx.x1 + r && y >= bx.y0 - r && y <= bx.y1 + r) { out.push(g.i); break; }
+      }
+    }
+    return out;
+  }
+
+  /**
+   * Split hand text into the pieces that survive erasing `erased` letter indices.
+   * Each piece keeps the exact look and position of its letters (seed offsets + origin shift).
+   */
+  splitText(o, erased) {
+    const L = layoutHand(o);
+    const pieces = [];
+    const text = o.text;
+    let i = 0;
+    while (i < text.length) {
+      while (i < text.length && (erased.has(i) || /\s/.test(text[i]))) i++;
+      if (i >= text.length) break;
+      let j = i;
+      while (j < text.length && !erased.has(j)) j++;
+      let e = j;
+      while (e > i && /\s/.test(text[e - 1])) e--;
+      const g = L.glyphs.find((q) => q.i === i);
+      const k = o.sx || 1;
+      const gx = g.x * k;
+      const c = Math.cos(o.rot || 0), sn = Math.sin(o.rot || 0);
+      let ws = i;
+      while (ws > 0 && !/\s/.test(text[ws - 1])) ws--;
+      const wordStart = ws === 0 && o.w0 !== undefined ? o.w0 : (o.i0 || 0) + ws;
+      pieces.push({
+        ...o,
+        id: pieces.length === 0 && i === 0 ? o.id : uid('t'),
+        text: text.slice(i, e),
+        x: o.x + gx * c, y: o.y + gx * sn,
+        i0: (o.i0 || 0) + i, w0: wordStart, xoff: (o.xoff || 0) + g.x,
+      });
+      i = j;
+    }
+    return pieces;
+  }
+
   endStrokeErase() {
     const d = this.drag;
     const ops = [];
+    const letterErase = [];
     for (const [lid, ids] of d.hits) {
       ids.forEach((id) => this.hidden.delete(id));
       ops.push(opDelObjs(this.page, findLayer(this.page, lid), ids));
     }
-    if (ops.length) this.commit(batch(ops));
+    for (const it of d.letters.values()) {
+      this.hidden.delete(it.obj.id);
+      this.invalidate(it.layerId);
+      const layer = findLayer(this.page, it.layerId);
+      const pieces = this.splitText(it.obj, it.set);
+      ops.push(opDelObjs(this.page, layer, [it.obj.id]));
+      if (pieces.length) ops.push(opAddObjs(this.page, layer, pieces));
+      letterErase.push({ layer: it.layerId, obj: clone(it.obj), erased: [...it.set].sort((a, b) => a - b), pieces: clone(pieces) });
+    }
+    if (ops.length) this.commit(batch(ops), letterErase.length ? { letterErase } : undefined);
   }
 
   objHitsSegment(o, a, b, r) {
     const box = objBBox(o, measureText);
     const seg = bboxOfPoints([a, b], r);
     if (!box || !boxesOverlap(box, seg)) return false;
-    if (o.type === 'text') {
-      const poly = textCorners(o, measureText);
+    if (o.type === 'text' || o.type === 'image') {
+      const poly = o.type === 'text' ? textCorners(o, measureText) : imageCorners(o);
       if (pointInPolygon(a, poly) || pointInPolygon(b, poly)) return true;
       return poly.some((q, i) => distToSegment(q, a, b) < r || distToSegment(a, q, poly[(i + 1) % 4]) < r);
     }
@@ -1186,8 +1277,8 @@ export class Editor {
       for (const layer of this.selectableLayers()) {
         for (const o of layer.objects) {
           let pts;
-          if (o.type === 'text') {
-            const c = textCorners(o, measureText);
+          if (o.type === 'text' || o.type === 'image') {
+            const c = o.type === 'text' ? textCorners(o, measureText) : imageCorners(o);
             pts = [...c, [(c[0][0] + c[2][0]) / 2, (c[0][1] + c[2][1]) / 2]];
           } else {
             const all = o.paths.flat();
@@ -1377,8 +1468,8 @@ export class Editor {
       for (let i = layer.objects.length - 1; i >= 0; i--) {
         const o = layer.objects[i];
         if (o.type === 'stroke' && o.tool === 'eraser') continue;
-        if (o.type === 'text') {
-          if (pointInPolygon(p, textCorners(o, measureText))) return { layerId: layer.id, obj: o };
+        if (o.type === 'text' || o.type === 'image') {
+          if (pointInPolygon(p, o.type === 'text' ? textCorners(o, measureText) : imageCorners(o))) return { layerId: layer.id, obj: o };
         } else if (this.objHitsSegment(o, p, p, tol)) return { layerId: layer.id, obj: o };
       }
     }

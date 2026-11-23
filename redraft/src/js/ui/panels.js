@@ -111,10 +111,10 @@ export class Panels {
         ? `<p class="hint">Higher stabilizer = smoother lines. <b>Hold still</b> at the end of a stroke to snap it to a clean line, box, circle or arrow. <b>Two fingers</b> pan and zoom · <b>two-finger tap</b> undo · <b>three-finger tap</b> redo. Apple Pencil pressure changes the width.</p>`
         : `<p class="hint">Higher stabilizer = smoother, hand-drawn lines. <b>Hold still</b> at the end of a stroke to snap it to a clean line, box, circle or arrow. <b>Shift</b>-drag draws a straight line. <b>Alt</b>-click picks a colour.</p>`));
     } else if (t === 'eraser') {
-      card.appendChild(seg('Mode', [['brush', 'Brush'], ['stroke', 'Whole stroke']], s.mode, (v) => { s.mode = v; ed.emit('settings'); ed.updateCursor(); }));
+      card.appendChild(seg('Mode', [['brush', 'Brush'], ['stroke', 'Strokes & letters']], s.mode, (v) => { s.mode = v; ed.emit('settings'); ed.updateCursor(); }));
       card.appendChild(size(200, 1));
       card.appendChild(check('Erase on all layers', s.allLayers, (v) => { s.allLayers = v; }));
-      card.appendChild(h(`<p class="hint">Only erases your layers. The scan underneath is locked and never touched. Press <b>E</b> again to switch mode.</p>`));
+      card.appendChild(h(`<p class="hint"><b>Brush</b> rubs out ink, even half a letter. <b>Strokes &amp; letters</b> removes whole strokes, and on handwriting removes just the letters you touch; the rest stays exactly in place and editable. Replay shows the erasing. The scan underneath is never touched. Press <b>E</b> to switch.</p>`));
     } else if (t === 'cover') {
       card.appendChild(seg('Mode', [['brush', 'Brush'], ['box', 'Box']], s.mode, (v) => { s.mode = v; ed.emit('settings'); ed.updateCursor(); }));
       if (s.mode === 'brush') card.appendChild(size(300, 1));

@@ -168,8 +168,14 @@ export function objPoints(o) {
 }
 
 /** Bounding box in page coordinates. `measure(obj)` returns {w,h} for text. */
+export function imageCorners(o) {
+  const c = Math.cos(o.rot || 0), s = Math.sin(o.rot || 0);
+  return [[0, 0], [o.w, 0], [o.w, o.h], [0, o.h]].map(([x, y]) => [o.x + x * c - y * s, o.y + x * s + y * c]);
+}
+
 export function objBBox(o, measure) {
   if (o.type === 'stroke') return bboxOfPoints(o.paths.flat(), o.size / 2 + 1);
+  if (o.type === 'image') return bboxOfPoints(imageCorners(o));
   if (o.type === 'text') {
     const corners = textCorners(o, measure);
     return bboxOfPoints(corners);
@@ -192,6 +198,10 @@ export function transformObj(o, m) {
       size: o.size * k,
       paths: o.paths.map((path) => path.map((p) => { const q = applyMat(m, p); return p.length > 2 ? [q[0], q[1], ...p.slice(2)] : q; })),
     };
+  }
+  if (o.type === 'image') {
+    const q = applyMat(m, [o.x, o.y]);
+    return { ...o, x: q[0], y: q[1], w: o.w * k, h: o.h * k, rot: (o.rot || 0) + matRotation(m) };
   }
   if (o.type === 'text') {
     const q = applyMat(m, [o.x, o.y]);

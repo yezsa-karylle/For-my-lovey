@@ -5,7 +5,7 @@
 import { uid, newLayer, clone } from '../core/model.js';
 import { rdp, bboxOfPoints } from '../core/geometry.js';
 import { detectGrid } from '../render/paper.js';
-import { naturalWidth, glyphTop, layoutHand, loadHandFonts, traceSkeleton, zhangSuen } from '../render/hand.js';
+import { naturalWidth, glyphTop, layoutHand, loadHandFonts, traceSkeleton, zhangSuen, drawHand, handReady, HAND_FONTS } from '../render/hand.js';
 
 // Palette of the notes engine (ink colours as drawn, highlight colours before alpha).
 export const PALETTE = {
@@ -238,7 +238,7 @@ export async function getOcr(logger) {
 
 async function ocrImage(canvas, psm) {
   const w = await getOcr();
-  await w.setParameters({ tessedit_pageseg_mode: String(psm), preserve_interword_spaces: '0', tessedit_char_blacklist: '|~{}[]_\\@#$^`¢§«»©®°±' });
+  await w.setParameters({ tessedit_pageseg_mode: String(psm), preserve_interword_spaces: '0', tessedit_char_blacklist: '~{}[]_\\@#$^`¢§«»©®°±' });
   const { data } = await w.recognize(canvas);
   const words = [];
   for (const b of data.blocks || []) for (const p of b.paragraphs) for (const l of p.lines) for (const wd of l.words) words.push(wd);
@@ -251,26 +251,46 @@ async function ocrImage(canvas, psm) {
 // words are snapped to words read confidently elsewhere in the notes.
 const CONFUSE = { 'a|o': 0.3, 'u|w': 0.35, 'n|r': 0.5, 'e|c': 0.4, 'l|i': 0.3, 'i|t': 0.5, 'h|b': 0.5, 'n|h': 0.5, 'a|d': 0.5, 'f|t': 0.5, 'y|v': 0.5, 'm|n': 0.5, 's|5': 0.4 };
 const subCost = (a, b) => (a === b ? 0 : CONFUSE[a < b ? a + '|' + b : b + '|' + a] ?? 1);
+// Thin letters (i, l, t, the dot-less stroke of j) are the ones the recogniser drops.
+const insCost = (ch) => (/[iltj]/.test(ch) ? 0.4 : 1);
 function wDist(a, b) {
-  const prev = Array.from({ length: b.length + 1 }, (_, j) => j);
+  const prev = [0];
+  for (let j = 1; j <= b.length; j++) prev[j] = prev[j - 1] + insCost(b[j - 1]);
   for (let i = 1; i <= a.length; i++) {
     const cur = [i];
     for (let j = 1; j <= b.length; j++) {
-      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + subCost(a[i - 1], b[j - 1]));
+      cur[j] = Math.min(prev[j] + 1, cur[j - 1] + insCost(b[j - 1]), prev[j - 1] + subCost(a[i - 1], b[j - 1]));
       if (i > 1 && j > 1 && a.slice(i - 2, i) === 'rn' && b[j - 1] === 'm') cur[j] = Math.min(cur[j], prev[j - 1]);
     }
     prev.splice(0, prev.length, ...cur);
   }
   return prev[b.length];
 }
-const COMMON = 'the and of to a in is for on that with as by be are this it from or at an not can more also all its their they your our has have'.split(' ');
+const COMMON = ('the and of to a in is for on that with as by be are this it from or at an not can more also all its their they your our has have '
+  + 'life live lives living family health well being education work personal growth people need needs basic human home homes house houses '
+  + 'housing safe safety quality development community communities government planners planning social economic issues solve '
+  + 'provides shelter protection improves supports guides urban city major part make makes solutions spot problems '
+  + 'affordable affordability sustainable accessible livable neighborhoods building buildings design space spaces area areas floor '
+  + 'window windows wall walls room rooms light ventilation natural minimum maximum required least than less must open opening openings '
+  + 'property line lines code section rule rules public private street road access water clean enough disease security privacy '
+  + 'with which when where while what each other into over under between within without along through after before during also').split(' ');
 export const vocab = new Map(COMMON.map((w) => [w, 5]));
 export function learnWords(words) {
   for (const w of words) if (w.conf >= 88) for (const t of w.text.toLowerCase().match(/[a-z]{3,}/g) || []) vocab.set(t, (vocab.get(t) || 0) + 1);
 }
+function onlyThinMissing(w, v) {
+  if (v.length <= w.length || v.length - w.length > 2) return false;
+  let j = 0;
+  for (let i = 0; i < v.length; i++) {
+    if (j < w.length && v[i] === w[j]) j++;
+    else if (!/[iltj]/.test(v[i])) return false;
+  }
+  return j === w.length;
+}
+
 export function correctWord(text, conf) {
-  if (conf >= 80) return text;
-  return text.replace(/[A-Za-z]{3,}/g, (wd) => {
+  return text.replace(/[A-Za-z|]{2,}/g, (raw) => {
+    const wd = raw.replace(/\|/g, 'l');
     const low = wd.toLowerCase();
     if ((vocab.get(low) || 0) >= 1) return wd;
     let best = null, bd = Infinity;
@@ -279,7 +299,12 @@ export function correctWord(text, conf) {
       const d = wDist(low, v);
       if (d < bd || (d === bd && n > (vocab.get(best) || 0))) { bd = d; best = v; }
     }
-    if (!best || bd > Math.min(1.2, low.length * 0.2)) return wd;
+    // Confident words are only fixed when the sole difference is dropped thin letters.
+    if (conf >= 80) {
+      const thin = [...vocab.keys()].filter((v) => (vocab.get(v) || 0) >= 2 && onlyThinMissing(low, v));
+      if (!thin.length) return wd;
+      best = thin.reduce((a, b) => ((vocab.get(b) || 0) > (vocab.get(a) || 0) ? b : a));
+    } else if (!best || bd > Math.min(1.2, Math.max(0.6, low.length * 0.2))) return wd;
     // Keep the original capitalisation pattern.
     if (wd === wd.toUpperCase()) return best.toUpperCase();
     if (wd[0] === wd[0].toUpperCase()) return best[0].toUpperCase() + best.slice(1);
@@ -313,6 +338,7 @@ export function cleanOcrText(t) {
   return t
     .replace(/[‘’]/g, "'").replace(/[“”]/g, '"').replace(/[–—]/g, '-')
     .replace(/-\s?[)>]/g, '->').replace(/<\s?-/g, '<-')
+    .replace(/(^|\s)\|(?=[\s.]|$)/g, '$1I').replace(/\|/g, 'l')
     .replace(/\s+/g, ' ').trim();
 }
 
@@ -321,7 +347,14 @@ export function cleanOcrText(t) {
  * Analyse a page raster. `source` is a canvas/bitmap of the page at page resolution.
  * Returns { grid, divider, layers: { highlights, lines, text }, stats }.
  */
-export async function analyzePage(source, pageW, pageH, { onProgress = () => {}, textItems = null } = {}) {
+export async function analyzePage(source, pageW, pageH, { onProgress = () => {}, textItems = null, fontHint = null, docSpacing = null, spacing = null, ocrMemo = null } = {}) {
+  // ocrMemo: reuse OCR results when the same page is laid out again (second pass).
+  const ocr = async (key, img, psm) => {
+    if (ocrMemo && ocrMemo.has(key)) return ocrMemo.get(key);
+    const res = await ocrImage(img, psm);
+    if (ocrMemo) ocrMemo.set(key, res);
+    return res;
+  };
   await loadHandFonts();
   const W = pageW, H = pageH;
   const cv = new OffscreenCanvas(W, H);
@@ -555,7 +588,9 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
   for (const c of comps) {
     c.cls = majority(c.votes, INK_CLASSES);
     if (c.area < 3) continue;
-    if (c.h > sy * 1.35 || c.w > sy * 2.8) sketches.push(c); else glyphs.push(c);
+    // Big shapes, and mostly-empty outlines (diagram boxes, arrows), are drawings, not letters.
+    const hollow = c.w > 60 && c.h > 24 && c.area / (c.w * c.h) < 0.22;
+    if (c.h > sy * 1.35 || c.w > sy * 2.8 || hollow) sketches.push(c); else glyphs.push(c);
   }
 
   // Baseline offset within a grid row = most common bottom of mid-sized glyphs.
@@ -591,6 +626,74 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
     }
   }
 
+  // ---- diagrams: drawings, filled shapes and their small labels are kept as an exact
+  // picture clipped from the scan (paper and grid made transparent), not traced.
+  onProgress('Finding diagrams');
+  const figures = [];
+  let FIG = null; // diagram regions, finished after OCR (unreadable or too-tall "text" is drawing too)
+  {
+    const sx = grid.sx, syy = grid.sy;
+    const near = (v, o, sp) => { const d = ((v - o) % sp + sp) % sp; return Math.min(d, sp - d); };
+    const onGrid = (x, y) => near(x + 0.5, grid.ox, sx) < 1.3 || near(y + 0.5, grid.oy, syy) < 1.3;
+    // Ink dilated by 2px, so anti-aliased letter edges don't count as fills.
+    const inkNear = new Uint8Array(W * H);
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      if (!ink[y * W + x]) continue;
+      for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) { const X = x + dx, Y = y + dy; if (X >= 0 && Y >= 0 && X < W && Y < H) inkNear[Y * W + X] = 1; }
+    }
+    const fill = new Uint8Array(W * H);
+    for (let i = 0; i < W * H; i++) {
+      if (cls[i] !== C_NONE || inkNear[i]) continue;
+      const x = i % W, y = (i - x) / W;
+      if (inDivider(x) || lumAt(i) > 236 || onGrid(x, y)) continue;
+      fill[i] = 1;
+    }
+    const seeds = [];
+    for (const c of labelComponents(fill, W, H).comps) if (c.area >= 300 && c.w >= 12 && c.h >= 12) seeds.push({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 });
+    for (const c of sketches) seeds.push({ x0: c.x0, y0: c.y0, x1: c.x1, y1: c.y1 });
+    // Solid lines that are not underlines (dimension lines, walls, floor lines).
+    for (const o of lines) {
+      if (o.kind !== 'line') continue;
+      const b = bboxOfPoints(o.paths.flat(), o.size / 2);
+      const underline = runs.some((r) => r.y1 <= b.y + 4 && b.y - r.y1 < 16 && Math.min(r.x1, b.x + b.w) - Math.max(r.x0, b.x) > 0.5 * b.w);
+      if (!underline) seeds.push({ x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h });
+    }
+    // Grow and merge.
+    let regs = seeds.map((b) => ({ x0: b.x0 - 14, y0: b.y0 - 14, x1: b.x1 + 14, y1: b.y1 + 14 }));
+    const ov = (a, b) => a.x0 <= b.x1 && b.x0 <= a.x1 && a.y0 <= b.y1 && b.y0 <= a.y1;
+    const mergeAll = () => {
+      let changed = true;
+      while (changed) {
+        changed = false;
+        outer: for (let i = 0; i < regs.length; i++) for (let j = i + 1; j < regs.length; j++) {
+          if (!ov(regs[i], regs[j])) continue;
+          const a = regs[i], b = regs[j];
+          regs[i] = { x0: Math.min(a.x0, b.x0), y0: Math.min(a.y0, b.y0), x1: Math.max(a.x1, b.x1), y1: Math.max(a.y1, b.y1) };
+          regs.splice(j, 1);
+          changed = true;
+          break outer;
+        }
+      }
+    };
+    mergeAll();
+    // A real diagram has some size; a lone small blob stays a vector sketch.
+    regs = regs.filter((r) => (r.x1 - r.x0) * (r.y1 - r.y0) > 6000 && (r.x1 - r.x0) > 60 && (r.y1 - r.y0) > 40);
+    // Absorb the labels inside / beside each drawing.
+    const absorbed = new Set();
+    for (let pass = 0; pass < 2; pass++) {
+      for (const r of runs) {
+        if (absorbed.has(r)) continue;
+        const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2, small = r.y1 - r.y0 < syy * 0.55;
+        const reg = regs.find((g) => (cx > g.x0 && cx < g.x1 && cy > g.y0 && cy < g.y1 && r.x1 - r.x0 < (g.x1 - g.x0) * 0.95) || (small && ov(g, { x0: r.x0 - 24, y0: r.y0 - 24, x1: r.x1 + 24, y1: r.y1 + 24 })));
+        if (!reg) continue;
+        absorbed.add(r);
+        Object.assign(reg, { x0: Math.min(reg.x0, r.x0 - 6), y0: Math.min(reg.y0, r.y0 - 6), x1: Math.max(reg.x1, r.x1 + 6), y1: Math.max(reg.y1, r.y1 + 6) });
+      }
+      mergeAll();
+    }
+    FIG = { regs, ov, mergeAll, onGrid, absorbed, syy };
+  }
+
   // ---- OCR: one pass per column on a clean black-on-white image, then per-run retries.
   const SCALE = 3;
   const OCR_PSM_LINES = (typeof window !== 'undefined' && window.__ocrMode) || 'column';
@@ -617,8 +720,10 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
       const r = data[gi * 4], g = data[gi * 4 + 1], b = data[gi * 4 + 2];
       // Darkness relative to paper, colour-blind (red/blue ink count as dark).
       const dark = Math.max(0, 255 - Math.min(r, g, b) * 0.55 - (0.299 * r + 0.587 * g + 0.114 * b) * 0.45);
-      let v = 255 - Math.min(255, dark * (keep[i] === 2 ? 1.6 : 1.1));
-      if (keep[i] === 1 && v > 170) v = 255;
+      const mode = (typeof window !== 'undefined' && window.__ocrStroke) || 'thick';
+      let v = 255 - Math.min(255, dark * (keep[i] === 2 ? 1.6 : mode === 'thick' ? 1.8 : 1.1));
+      if (keep[i] === 1 && v > (mode === 'thick' ? 215 : 170)) v = 255;
+      if (mode === 'solid' && keep[i] === 2) v = 0;
       img.data[i * 4] = img.data[i * 4 + 1] = img.data[i * 4 + 2] = v;
     }
     sg.putImageData(img, 0, 0);
@@ -644,13 +749,13 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
   } else {
     for (const r of runs) r.words = [];
     for (const side of OCR_PSM_LINES === 'column' ? [0, 1] : []) {
-      const items = runs.filter((r) => r.side === side);
+      const items = runs.filter((r) => r.side === side && !FIG.absorbed.has(r)); // diagram labels stay out of OCR
       if (!items.length) continue;
       onProgress(`Reading text (column ${side + 1})`);
       const x0 = side === 0 ? 0 : Math.ceil(midX + (divider ? divider.w / 2 : 0));
       const x1 = side === 0 ? Math.floor(midX - (divider ? divider.w / 2 : 0)) : W;
       const img = clean(x0, 0, x1, H, items);
-      const res = await ocrImage(img, 4);
+      const res = await ocr('col' + side, img, 4);
       const S = img.ocrScale || SCALE;
       for (const r of items) r.words = [];
       for (const wd of res.words) {
@@ -668,22 +773,198 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
       }
     }
     // Retry runs that came back empty or only partly covered, one line at a time.
-    const retry = OCR_PSM_LINES === 'line' ? runs.filter((r) => r.x1 - r.x0 > 6) : runs.filter((r) => {
+    const retry = (OCR_PSM_LINES === 'line' ? runs.filter((r) => r.x1 - r.x0 > 6) : runs.filter((r) => {
       const cov = r.words.reduce((s, w) => s + (w.x1 - w.x0), 0) / Math.max(1, r.x1 - r.x0);
       return r.x1 - r.x0 > 8 && (!r.words.length || cov < 0.55 || r.words.some((w) => w.conf < 45));
-    });
+    })).filter((r) => !FIG.absorbed.has(r));
     for (const [k, r] of retry.entries()) {
       onProgress(OCR_PSM_LINES === 'line' ? `Reading line ${k + 1} of ${retry.length}` : `Re-reading unclear lines (${k + 1}/${retry.length})`);
       const pad = 10;
       const cx0 = Math.max(0, r.x0 - pad), cy0 = Math.max(0, r.y0 - pad);
       const img = clean(cx0, cy0, Math.min(W, r.x1 + pad), Math.min(H, r.y1 + pad), [r]);
-      const res = await ocrImage(img, 7);
+      const res = await ocr(`run${r.x0},${r.y0},${r.x1},${r.y1}`, img, 7);
       const t = cleanOcrText(res.text || '');
       const boxedWords = res.words.filter((w) => w.text.trim()).map((w) => ({ text: w.text.trim(), conf: w.confidence, x0: w.bbox.x0 / (img.ocrScale || SCALE) + cx0, x1: w.bbox.x1 / (img.ocrScale || SCALE) + cx0 }));
       if (t && res.confidence >= Math.max(30, ...r.words.map((w) => w.conf), 0) - 5) {
         r.words = boxedWords.length ? boxedWords : [{ text: t, conf: res.confidence, x0: r.x0, x1: r.x1 }];
       }
     }
+  }
+
+  // ---- diagrams, second pass: "text" the OCR could not read, or taller than any text line,
+  // is part of a drawing (thin box outlines can break into letter-sized pieces).
+  {
+    const { ov, mergeAll, onGrid, absorbed, syy } = FIG;
+    let regs = FIG.regs;
+    const more = runs.filter((r) => r.y1 - r.y0 > syy * 1.1 || (!r.words.some((w) => /[A-Za-z0-9]{2,}/.test(w.text) && w.conf >= 40) && r.comps.some((c) => c.area > 30)));
+    if (more.length) {
+      // Unreadable / too-tall bits only extend a diagram that has real drawing evidence nearby;
+      // on their own (an odd heading, a smudge) they never turn text into a picture.
+      const extra = more.map((r) => ({ x0: r.x0 - 14, y0: r.y0 - 14, x1: r.x1 + 14, y1: r.y1 + 14 }))
+        .filter((e) => regs.some((g) => ov(g, { x0: e.x0 - 30, y0: e.y0 - 30, x1: e.x1 + 30, y1: e.y1 + 30 })));
+      regs.push(...extra);
+      FIG.regs = regs;
+      mergeAll.call(null);
+      regs = FIG.regs;
+    }
+    regs.splice(0, regs.length, ...regs.filter((r) => (r.x1 - r.x0) * (r.y1 - r.y0) > 9000 && (r.x1 - r.x0) > 60 && (r.y1 - r.y0) > 40));
+    for (let pass = 0; pass < 2; pass++) {
+      for (const r of runs) {
+        if (absorbed.has(r)) continue;
+        const cx = (r.x0 + r.x1) / 2, cy = (r.y0 + r.y1) / 2, h = r.y1 - r.y0;
+        const pad = more.includes(r) ? 12 : h < syy * 0.55 ? 24 : h < syy * 0.75 ? 10 : -1;
+        const reg = regs.find((g) => (cx > g.x0 && cx < g.x1 && cy > g.y0 && cy < g.y1 && r.x1 - r.x0 < (g.x1 - g.x0) * 0.95) || (pad >= 0 && ov(g, { x0: r.x0 - pad, y0: r.y0 - pad, x1: r.x1 + pad, y1: r.y1 + pad })));
+        if (!reg) continue;
+        absorbed.add(r);
+        Object.assign(reg, { x0: Math.min(reg.x0, r.x0 - 6), y0: Math.min(reg.y0, r.y0 - 6), x1: Math.max(reg.x1, r.x1 + 6), y1: Math.max(reg.y1, r.y1 + 6) });
+      }
+      mergeAll.call(null);
+      regs = FIG.regs;
+    }
+    // Boxes/lines/sketches inside a diagram belong to its picture.
+    const inside = (b, g) => b.x0 >= g.x0 - 4 && b.x1 <= g.x1 + 4 && b.y0 >= g.y0 - 4 && b.y1 <= g.y1 + 4;
+    for (let i = lines.length - 1; i >= 0; i--) {
+      const b = bboxOfPoints(lines[i].paths.flat(), lines[i].size / 2);
+      const bb = { x0: b.x, y0: b.y, x1: b.x + b.w, y1: b.y + b.h };
+      let g = regs.find((r) => inside(bb, r));
+      if (!g && lines[i].kind === 'dashbox') {
+        // A dashed frame drawn around a diagram (no regular text inside) joins the picture.
+        const hasText = runs.some((ru) => !absorbed.has(ru) && inside({ x0: ru.x0, y0: ru.y0, x1: ru.x1, y1: ru.y1 }, bb));
+        if (!hasText) g = regs.find((r) => ov(r, bb));
+      }
+      if (!g) continue;
+      Object.assign(g, { x0: Math.min(g.x0, bb.x0 - 4), y0: Math.min(g.y0, bb.y0 - 4), x1: Math.max(g.x1, bb.x1 + 4), y1: Math.max(g.y1, bb.y1 + 4) });
+      lines.splice(i, 1);
+    }
+    for (let i = sketches.length - 1; i >= 0; i--) if (regs.some((g) => inside(sketches[i], g))) sketches.splice(i, 1);
+    for (let i = runs.length - 1; i >= 0; i--) if (absorbed.has(runs[i])) runs.splice(i, 1);
+    void onGrid;
+    // Clip each region from the scan.
+    for (const g of regs) {
+      const x0 = Math.max(0, Math.floor(g.x0)), y0 = Math.max(0, Math.floor(g.y0));
+      const x1 = Math.min(W, Math.ceil(g.x1)), y1 = Math.min(H, Math.ceil(g.y1));
+      const w = x1 - x0, h = y1 - y0;
+      if (w < 8 || h < 8) continue;
+      const c = new OffscreenCanvas(w, h);
+      const gx = c.getContext('2d');
+      const img = gx.createImageData(w, h);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const X = x + x0, Y = y + y0, i = Y * W + X, k = (y * w + x) * 4;
+        const r = data[i * 4], gg = data[i * 4 + 1], b = data[i * 4 + 2];
+        const L = lumAt(i), sat = Math.max(r, gg, b) - Math.min(r, gg, b);
+        let a = 255;
+        if (cls[i] === C_YEL || cls[i] === C_PINK || inDivider(X)) a = 0; // highlights live on their own layer
+        else if (onGrid(X, Y) && sat < 22 && L > 170 && !ink[i]) a = 0; // grid lines come from the paper
+        else if (L > 246) a = 0; // paper
+        else if (sat < 22 && L > 226 && !ink[i]) a = Math.round(255 * Math.min(1, (246 - L) / 20)); // soft edges
+        img.data[k] = r; img.data[k + 1] = gg; img.data[k + 2] = b; img.data[k + 3] = a;
+      }
+      gx.putImageData(img, 0, 0);
+      const blob = await c.convertToBlob({ type: 'image/png' });
+      const asset = uid('a');
+      figures.push({ asset, bytes: new Uint8Array(await blob.arrayBuffer()), obj: { id: uid('i'), type: 'image', kind: 'figure', asset, x: x0, y: y0, w, h, rot: 0, opacity: 1 } });
+    }
+    }
+
+  // ---- which handwriting font is this? Render a few confidently read lines in every
+  // bundled font and keep the one whose letters overlap the scan best.
+  let ADV = spacing ?? 0.86;
+  const FONT = fontHint || detectFont();
+  function detectFont() {
+    const fams = Object.keys(HAND_FONTS).filter((f) => handReady({ font: f, weight: 400 }));
+    if (fams.length < 2) return fams[0] || 'Gaegu';
+    const samples = runs
+      .filter((r) => r.words.length >= 3 && r.words.every((w) => w.conf >= 75) && r.x1 - r.x0 > 200)
+      .sort((a, b) => (b.x1 - b.x0) - (a.x1 - a.x0)).slice(0, 6);
+    if (!samples.length) return 'Gaegu';
+    const score = Object.fromEntries(fams.map((f) => [f, 0]));
+    const dilate = (m, w, h) => {
+      const o = new Uint8Array(w * h);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        if (!m[y * w + x]) continue;
+        for (let dy = -2; dy <= 2; dy++) for (let dx = -2; dx <= 2; dx++) {
+          const X = x + dx, Y = y + dy;
+          if (X >= 0 && Y >= 0 && X < w && Y < h) o[Y * w + X] = 1;
+        }
+      }
+      return o;
+    };
+    for (const r of samples) {
+      const text = cleanOcrText(r.words.slice().sort((a, b) => a.x0 - b.x0).map((w) => w.text).join(' '));
+      const pad = 8, w2 = r.x1 - r.x0 + 1 + pad * 2, h2 = r.y1 - r.y0 + 1 + pad * 2;
+      const scan = new Uint8Array(w2 * h2);
+      for (const c of r.comps) for (const j of c.pix) { const px = j % W, py = (j - px) / W; scan[(py - r.y0 + pad) * w2 + (px - r.x0 + pad)] = 1; }
+      const sd = dilate(scan, w2, h2);
+      const bottoms = r.comps.filter((c) => c.h > sy * 0.2).map((c) => c.y1 + 1).sort((a, b) => a - b);
+      const base = (bottoms.length ? bottoms[Math.floor(bottoms.length * 0.35)] : r.y1) - r.y0 + pad;
+      const cv = new OffscreenCanvas(w2, h2);
+      const g = cv.getContext('2d', { willReadFrequently: true });
+      for (const f of fams) {
+        const o = { hand: true, font: f, weight: 400, text, seed: 1, jitter: 0, x: 0, y: 0, color: '#000', opacity: 1, sx: 1 };
+        o.size = (r.x1 - r.x0 + 1) / Math.max(0.2, (naturalWidth(f, 400, text) || 1) - 0.06);
+        const L = layoutHand(o);
+        if (!L) continue;
+        const fit = { ...o, sx: (r.x1 - r.x0 + 1) / Math.max(1, L.box.x1 - L.box.x0) };
+        const L2 = layoutHand(fit);
+        fit.x = pad - L2.box.x0;
+        fit.y = base;
+        g.clearRect(0, 0, w2, h2);
+        drawHand(g, fit);
+        const a = g.getImageData(0, 0, w2, h2).data;
+        const m = new Uint8Array(w2 * h2);
+        for (let i = 0; i < w2 * h2; i++) m[i] = a[i * 4 + 3] > 100 ? 1 : 0;
+        const md = dilate(m, w2, h2);
+        let inter = 0, uni = 0;
+        for (let i = 0; i < w2 * h2; i++) { const p = sd[i] & m[i] | scan[i] & md[i]; inter += p; uni += sd[i] | md[i] ? 1 : 0; }
+        score[f] += inter / Math.max(1, uni);
+      }
+    }
+    let best = fams.reduce((b, f) => (score[f] > score[b] ? f : b), fams[0]);
+    // The notes generator's default font is Gaegu: another font has to win clearly.
+    if (best !== 'Gaegu' && score.Gaegu !== undefined && score[best] < score.Gaegu * 1.06) best = 'Gaegu';
+    if (typeof window !== 'undefined' && window.__rebuildDebug) window.__fontScores = score;
+    ADV = spacing ?? measureAdvance(best, samples);
+    return best;
+  }
+
+  /**
+   * Letter spacing differs between note generators. Size comes from letter heights
+   * (scan vs. the font's real glyph outlines), then the spacing is whatever makes the
+   * line exactly as wide as the scan. Medians over several lines remove the jitter.
+   */
+  function measureSamples(f, samples) {
+    const pct = (arr, q) => { const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(a.length * q))]; };
+    const out = [];
+    for (const r of samples) {
+      const text = cleanOcrText(r.words.slice().sort((a, b) => a.x0 - b.x0).map((w) => w.text).join(' '));
+      const bottoms = r.comps.filter((c) => c.h > sy * 0.2).map((c) => c.y1 + 1);
+      if (bottoms.length < 4) { out.push(null); continue; }
+      const base = pct(bottoms, 0.35);
+      const scanTop = pct(r.comps.filter((c) => c.area >= 12).map((c) => base - c.y0), 0.9);
+      const L = layoutHand({ hand: true, font: f, weight: 400, size: 1, text, seed: 1, jitter: 0, x: 0, y: 0, adv: 0.86 });
+      if (!L) { out.push(null); continue; }
+      const modelTop = pct(L.glyphs.filter((g) => g.box).map((g) => -g.box.y0), 0.9);
+      // Per-letter jitter makes the tallest scanned letters ~7% taller than the plain font
+      // (calibrated on notes with a known 0.86 spacing).
+      const size = scanTop / 1.074 / modelTop;
+      const words = text.split(/\s+/).filter(Boolean).length;
+      const gaps = 0.425 * (words - 1);
+      const sumAdv = (naturalWidth(f, 400, text, 1) || 1) - gaps;
+      out.push({ size, adv: ((r.x1 - r.x0 + 1) / size + 0.06 - gaps) / sumAdv, base });
+    }
+    return out;
+  }
+
+  /** Letter spacing of the document (pooled across pages): see measureSamples. */
+  function measureAdvance(f, samples) {
+    const pct = (arr, q) => { const a = arr.slice().sort((x, y) => x - y); return a[Math.min(a.length - 1, Math.floor(a.length * q))]; };
+    const vals = measureSamples(f, samples).filter(Boolean).map((m) => m.adv);
+    // All pages of a document come from one generator: pool the measurements across pages.
+    const pool = docSpacing ? docSpacing.concat(vals) : vals;
+    if (docSpacing) docSpacing.push(...vals);
+    if (pool.length < 2) return 0.86;
+    const a = Math.max(0.65, Math.min(1.1, pct(pool, 0.5)));
+    return Math.abs(a - 0.86) < 0.05 ? 0.86 : +a.toFixed(3); // within measurement noise of the default
   }
 
   // ---- build text objects
@@ -715,7 +996,7 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
     let color = PALETTE[CLASS_COLOR[r.cls] || 'ink'];
     if (r.cls === C_DARK && darkLevel(r) > 85) color = PALETTE.gray;
     const weight = /^TOPIC\b/i.test(text) || widths[ri] > medW * 1.35 ? 400 : 300;
-    const nw = naturalWidth('Gaegu', weight, text) || text.length * 0.4;
+    const nw = naturalWidth(FONT, weight, text, ADV) || text.length * 0.4;
     const inkW = r.x1 - r.x0 + 1;
     // Baseline: the grid row if the letters sit on it, otherwise measured.
     const bottoms = r.comps.filter((c) => c.h > sy * 0.2).map((c) => c.y1 + 1).sort((a, b) => a - b);
@@ -727,26 +1008,26 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
     const boxed = r.words.filter((w) => w.x1 > w.x0 && w.x1 - w.x0 < inkW + 2);
     const span = boxed.length >= 1 && boxed.length === r.words.length ? boxed[boxed.length - 1].x1 - boxed[0].x0 + 1 : inkW;
     const spanText = boxed.length >= 1 && boxed.length === r.words.length ? cleanOcrText(boxed.map((w) => w.text).join(' ')) : text;
-    const sizeW = span / Math.max(0.2, (naturalWidth('Gaegu', weight, spanText) || nw) - 0.06);
+    const sizeW = span / Math.max(0.2, (naturalWidth(FONT, weight, spanText, ADV) || nw) - 0.06);
     const tops = r.comps.filter((c) => c.area >= 12).map((c) => c.y0).sort((a, b) => a - b);
     const topY = tops.length ? tops[Math.min(tops.length - 1, Math.floor(tops.length * 0.08))] : r.y0;
     // Jitter (tilt, wobble, per-letter scale) lifts the highest letter ~14% above the font's nominal top.
-    const sizeH = (y - topY) / (glyphTop('Gaegu', weight, text) * 1.14);
+    const sizeH = (y - topY) / (glyphTop(FONT, weight, text) * 1.14);
     // Per-word estimate: robust to punctuation the OCR dropped or a garbled word.
     const per = r.words
-      .filter((w) => w.conf >= 70 && w.x1 > w.x0 && /^[A-Za-z]{3,}[.,;:]?$/.test(w.text))
-      .map((w) => (w.x1 - w.x0 - 2) / Math.max(0.3, (naturalWidth('Gaegu', weight, w.text.replace(/[.,;:]$/, '')) || 1) - 0.06)) // OCR boxes carry ~3px padding
+      .filter((w) => w.conf >= 85 && w.x1 > w.x0 && /^[A-Za-z]{4,}[.,;:]?$/.test(w.text))
+      .map((w) => (w.x1 - w.x0 - 2) / Math.max(0.3, (naturalWidth(FONT, weight, w.text.replace(/[.,;:]$/, ''), ADV) || 1) - 0.06)) // OCR boxes carry ~3px padding
       .sort((a, b) => a - b);
     // Median of the whole-line estimate and each confidently read word: one misread
     // character (an extra "(" or a dropped ":") can't drag the size far.
-    const cands = [sizeW, ...per].sort((a, b) => a - b);
+    const cands = [sizeW, ...per.filter((v) => v > sizeW * 0.8 && v < sizeW * 1.25)].sort((a, b) => a - b);
     let size = cands.length % 2 ? cands[(cands.length - 1) / 2] : (cands[cands.length / 2 - 1] + cands[cands.length / 2]) / 2;
     if (Math.abs(size - sizeH) / sizeH > 0.45) size = sizeH; // OCR text is clearly off: trust letter height
     const near = KNOWN_SIZES.reduce((b, s) => (Math.abs(s - size) < Math.abs(b - size) ? s : b), KNOWN_SIZES[0]);
-    if (Math.abs(near - size) / size < 0.09) size = near;
+    if (Math.abs(near - size) / size < 0.05) size = near;
     size = Math.max(10, Math.min(90, Math.round(size)));
-    if (typeof window !== 'undefined' && window.__rebuildDebug) r.sizeDbg = { sizeW: +sizeW.toFixed(1), sizeH: +sizeH.toFixed(1), per: per.map((v) => +v.toFixed(1)), span, inkW, spanText, topY, y, gt: glyphTop('Gaegu', weight, text) };
-    const obj = { id: uid('t'), type: 'text', hand: true, font: 'Gaegu', weight, size, color, opacity: 1, w: 0, rot: 0, jitter: 1, seed: (Math.random() * 2 ** 31) | 0, sx: 1, x: 0, y, text, conf: Math.round(conf) };
+    if (typeof window !== 'undefined' && window.__rebuildDebug) r.sizeDbg = { sizeW: +sizeW.toFixed(1), sizeH: +sizeH.toFixed(1), per: per.map((v) => +v.toFixed(1)), span, inkW, spanText, topY, y, gt: glyphTop(FONT, weight, text) };
+    const obj = { id: uid('t'), type: 'text', hand: true, font: FONT, adv: ADV, weight, size, color, opacity: 1, w: 0, rot: 0, jitter: 1, seed: (Math.random() * 2 ** 31) | 0, sx: 1, x: 0, y, text, conf: Math.round(conf) };
     const L = layoutHand(obj);
     if (L) {
       const lw = L.box.x1 - L.box.x0;
@@ -781,8 +1062,9 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
   return {
     debug,
     grid, divider,
-    layers: { highlights, lines: [...lines, ...sketchObjs], text: textObjs },
-    stats: { runs: runs.length, text: textObjs.length, highlights: highlights.length, lines: lines.length, sketches: sketchObjs.length, baseline: m },
+    layers: { highlights, lines: [...figures.map((f) => f.obj), ...lines, ...sketchObjs], text: textObjs },
+    assets: figures.map((f) => ({ id: f.asset, mime: 'image/png', bytes: f.bytes })),
+    stats: { font: FONT, spacing: ADV, figures: figures.length, runs: runs.length, text: textObjs.length, highlights: highlights.length, lines: lines.length, sketches: sketchObjs.length, baseline: m },
   };
 }
 

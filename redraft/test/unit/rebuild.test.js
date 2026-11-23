@@ -22,6 +22,8 @@ test('correctWord snaps low-confidence look-alikes to words read confidently', (
   assert.equal(correctWord('bosic', 50), 'basic');
   assert.equal(correctWord('Howsing', 95), 'Howsing', 'confident words are left alone');
   assert.equal(correctWord('zebra', 30), 'zebra', 'no close match: unchanged');
+  learnWords([{ text: 'family', conf: 95 }, { text: 'family', conf: 95 }]);
+  assert.equal(correctWord('famiy', 92), 'family', 'a dropped thin letter is restored even when confident');
 });
 
 test('dashPolyline splits a line into dashes of the right length', () => {

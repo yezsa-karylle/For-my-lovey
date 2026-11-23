@@ -1,6 +1,6 @@
 // Print-quality export to PDF and PNG. Strokes and text are vectors in the
 // document, so they are re-rendered sharply at the export resolution.
-import { renderPageCanvas } from '../render/draw.js';
+import { renderPageCanvas, ensureImages } from '../render/draw.js';
 
 async function toBytes(canvas, type, quality) {
   const blob = await canvas.convertToBlob({ type, quality });
@@ -10,6 +10,7 @@ async function toBytes(canvas, type, quality) {
 /** Render a page at `dpi` using the editor's bitmap loader. */
 export async function renderForExport(editor, page, dpi) {
   const bmp = await editor.ensureBitmap(page);
+  await ensureImages(page.layers.flatMap((l) => l.objects));
   return renderPageCanvas(page, bmp, dpi / page.dpi);
 }
 

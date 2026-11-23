@@ -168,10 +168,44 @@ export function drawText(ctx, o, text = o.text, opts) {
   ctx.restore();
 }
 
+// ---------------------------------------------------------------- pictures (diagrams kept from scans)
+const images = new Map(); // assetId -> ImageBitmap | 'loading'
+let getAsset = () => null, onImageReady = () => {};
+/** The editor tells the renderer where image assets live and what to do when one finishes decoding. */
+export function setImageSource(get, onReady) { getAsset = get; onImageReady = onReady; }
+async function decode(id) {
+  const a = getAsset(id);
+  if (!a) return null;
+  images.set(id, 'loading');
+  const bmp = await createImageBitmap(new Blob([a.bytes], { type: a.mime }));
+  images.set(id, bmp);
+  return bmp;
+}
+/** Make sure every picture among `objs` is decoded (call before synchronous renders like export). */
+export async function ensureImages(objs) {
+  const ids = new Set(objs.filter((o) => o.type === 'image' && !(images.get(o.asset) instanceof ImageBitmap)).map((o) => o.asset));
+  await Promise.all([...ids].map(decode));
+}
+export function drawImageObj(ctx, o, clip) {
+  const bmp = images.get(o.asset);
+  if (!(bmp instanceof ImageBitmap)) {
+    if (!bmp) decode(o.asset).then((b) => b && onImageReady()).catch(() => {});
+    return;
+  }
+  ctx.save();
+  ctx.translate(o.x, o.y);
+  if (o.rot) ctx.rotate(o.rot);
+  ctx.globalAlpha = o.opacity ?? 1;
+  if (clip) { ctx.beginPath(); ctx.rect(clip.x, clip.y, clip.w, clip.h); ctx.clip(); }
+  ctx.drawImage(bmp, 0, 0, o.w, o.h);
+  ctx.restore();
+}
+
 // ---------------------------------------------------------------- dispatch
 export function drawObject(ctx, o, env) {
   if (o.type === 'stroke') drawStroke(ctx, o, env);
   else if (o.type === 'text') drawText(ctx, o);
+  else if (o.type === 'image') drawImageObj(ctx, o);
 }
 
 /** Draw a layer's objects onto a (transparent) context. */
