@@ -1,0 +1,1333 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Tonyo's Solar Return</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.gstatic.com">
+<link href="https://fonts.googleapis.com/css2?family=IM+Fell+English:ital@0;1&family=IM+Fell+English+SC&family=EB+Garamond:ital,wght@0,400;0,500;0,600;1,400;1,500&family=Caveat:wght@500;700&family=Noto+Sans+Symbols&display=swap" rel="stylesheet">
+<style>
+  /* Layout: a reading spread on a velvet table. Cards are dealt in rows,
+     two sticky sky diagrams (the chart wheel, the solar return orbit)
+     tie the scroll to the sky, and the letter ends on cardstock. */
+  :root {
+    color-scheme: dark;
+    --velvet: #1b1430;
+    --velvet-hi: #2c2150;
+    --ink: #241c2e;
+    --card: #efe3c8;
+    --card-edge: #d9c69d;
+    --gold: #caa04c;
+    --gold-hi: #f6dc94;
+    --gold-lo: #8a6424;
+    --oxblood: #8e2a3a;
+    --silver: #c3cfdf;
+    --rose: #e79aa6;
+    --text: #efe6d3;
+    --muted: #b7aac8;
+
+    --display: 'IM Fell English', 'EB Garamond', Georgia, serif;
+    --caps: 'IM Fell English SC', 'IM Fell English', Georgia, serif;
+    --body: 'EB Garamond', Georgia, 'Times New Roman', serif;
+    --hand: 'Caveat', 'Segoe Print', cursive;
+    --glyph: 'Noto Sans Symbols', 'Segoe UI Symbol', 'DejaVu Sans', sans-serif;
+
+    --foil: linear-gradient(115deg, #8a6424 0%, #e9c76f 18%, #fff0bd 30%, #c99a43 46%, #f2d27e 62%, #9b7330 80%, #e6c46c 100%);
+    --tex-velvet: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='260' height='260'><filter id='v'><feTurbulence type='fractalNoise' baseFrequency='.75' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .7  0 0 0 0 .6  0 0 0 0 1  0 0 0 .13 0'/></filter><rect width='100%' height='100%' filter='url(%23v)'/></svg>");
+    --tex-nap: radial-gradient(60% 40% at 18% 22%, #ffffff0d, transparent 70%), radial-gradient(55% 45% at 82% 68%, #ffffff0a, transparent 70%);
+    --tex-grain: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='220' height='220'><filter id='g'><feTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .25  0 0 0 0 .17  0 0 0 0 .08  0 0 0 .22 0'/></filter><rect width='100%' height='100%' filter='url(%23g)'/></svg>");
+    --tex-fox: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='500' height='500'><filter id='f'><feTurbulence type='fractalNoise' baseFrequency='.02' numOctaves='4' seed='11' stitchTiles='stitch'/><feColorMatrix values='0 0 0 0 .55  0 0 0 0 .38  0 0 0 0 .15  0 0 0 1.3 -.88'/></filter><rect width='100%' height='100%' filter='url(%23f)'/></svg>");
+  }
+
+  * { box-sizing: border-box; }
+  html { overflow-x: hidden; }
+  body {
+    margin: 0; min-height: 100%;
+    font-family: var(--body); font-size: 18px; line-height: 1.6; color: var(--text);
+    background-color: var(--velvet);
+    background-image: var(--tex-velvet), var(--tex-nap),
+      radial-gradient(120% 60% at 50% 0%, var(--velvet-hi), transparent 70%);
+    overflow-x: hidden; -webkit-font-smoothing: antialiased;
+  }
+  body::before { content: ""; position: fixed; inset: 0 0 auto; height: env(safe-area-inset-top, 0px); z-index: 60; background: var(--velvet); }
+  ::selection { background: var(--gold); color: var(--ink); }
+  button { font: inherit; }
+  :focus-visible { outline: 2px dashed var(--gold-hi); outline-offset: 4px; }
+
+  .wrap {
+    position: relative; z-index: 2;
+    max-width: 1080px; margin: 0 auto;
+    padding-left: max(16px, env(safe-area-inset-left, 0px));
+    padding-right: max(16px, env(safe-area-inset-right, 0px));
+  }
+  section { position: relative; padding-block: 96px; }
+  .eyebrow { font-family: var(--caps); letter-spacing: .22em; font-size: 14px; color: var(--gold); text-transform: lowercase; }
+  .foil {
+    background: var(--foil); background-size: 220% 100%;
+    -webkit-background-clip: text; background-clip: text; color: transparent;
+    animation: shimmer 7s ease-in-out infinite alternate;
+  }
+  @keyframes shimmer { from { background-position: 0% 0; } to { background-position: 100% 0; } }
+  h2 { font-family: var(--display); font-weight: 400; font-size: clamp(30px, 6vw, 50px); line-height: 1.1; margin: 10px 0 18px; text-wrap: balance; }
+  .prose { max-width: 62ch; }
+  .prose p { margin: 0 0 1em; }
+
+  /* ---------- Sky: three parallax star layers ---------- */
+  .sky { position: fixed; inset: 0; z-index: 0; pointer-events: none; overflow: hidden; }
+  .sky i { position: absolute; left: 0; top: 0; width: 2px; height: 2px; border-radius: 50%; background: transparent; will-change: transform; }
+
+  /* ---------- Progress: a moon riding a gold thread ---------- */
+  .progress { position: fixed; z-index: 50; left: 0; right: 0; top: env(safe-area-inset-top, 0px); height: 3px; background: rgba(202,160,76,.15); }
+  .progress b { display: block; height: 100%; width: 0; background: var(--foil); }
+  .progress svg { position: absolute; top: -7px; width: 16px; height: 16px; left: 0; transform: translateX(-8px); }
+
+  /* ---------- Intro: the deck ---------- */
+  #intro {
+    position: fixed; inset: 0; z-index: 80; cursor: pointer;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 28px;
+    padding: 24px max(16px, env(safe-area-inset-left, 0px));
+    background-color: var(--velvet);
+    background-image: var(--tex-velvet), var(--tex-nap), radial-gradient(70% 55% at 50% 45%, #3a2b63, transparent 75%);
+    transition: opacity .9s ease, visibility .9s;
+  }
+  #intro.gone { opacity: 0; visibility: hidden; pointer-events: none; }
+  #intro .lead { font-family: var(--display); font-size: clamp(28px, 7vw, 46px); text-align: center; line-height: 1.15; margin: 0; }
+  #intro .sub { font-family: var(--hand); font-size: 24px; color: var(--muted); margin: 0; }
+  .deck { position: relative; width: min(190px, 46vw); aspect-ratio: 7 / 12; perspective: 1200px; }
+  .deck .back, .deck .top { position: absolute; inset: 0; border-radius: 12px; }
+  .deck .back { box-shadow: 0 2px 0 #0003; }
+  .deck .back:nth-child(1) { transform: translate(-10px, 8px) rotate(-6deg); }
+  .deck .back:nth-child(2) { transform: translate(8px, 6px) rotate(4deg); }
+  .deck .back:nth-child(3) { transform: translate(-3px, 3px) rotate(-1.5deg); }
+  .deck .top { transform-style: preserve-3d; transition: transform 1.3s cubic-bezier(.2,.8,.2,1); animation: bob 3s ease-in-out infinite; }
+  .deck .top > div { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 12px; overflow: hidden; }
+  .deck .top .face { transform: rotateY(180deg); }
+  #intro.opening .deck .top { animation: none; transform: translateY(-14%) rotateY(180deg) scale(1.12); }
+  #intro.opening .sub { opacity: 0; transition: opacity .3s; }
+  @keyframes bob { 50% { transform: translateY(-6px) rotate(.6deg); } }
+
+  /* ---------- Tarot card shells ---------- */
+  .art { display: block; width: 100%; height: 100%; }
+  .cardback { background: #191230; box-shadow: inset 0 0 0 1px #0006; }
+  .cardface {
+    position: relative; height: 100%; border-radius: 12px; overflow: hidden;
+    background: #1a1330; box-shadow: inset 0 0 0 5px var(--card), inset 0 0 0 7px var(--gold-lo);
+    display: grid; grid-template-rows: auto 1fr auto;
+  }
+  .cardface .num { font-family: var(--glyph), var(--caps); text-align: center; color: var(--gold-hi); font-size: 15px; letter-spacing: .12em; padding-top: 14px; }
+  .cardface .num.roman { font-family: var(--caps); }
+  .cardface .pic { position: relative; min-height: 0; margin: 0 9px; overflow: hidden; }
+  .cardface .pic svg { position: absolute; inset: 0; width: 100%; height: 100%; }
+  .cardface .name {
+    margin: 0 12px 14px; padding: 5px 6px 4px; text-align: center;
+    background: var(--card); background-image: var(--tex-grain);
+    color: var(--ink); font-family: var(--hand); font-weight: 700; font-size: clamp(19px, 5vw, 22px); line-height: 1.05;
+    box-shadow: 0 0 0 1px var(--gold-lo);
+  }
+
+  /* ---------- Flip cards in a spread ---------- */
+  .spread { display: grid; gap: 34px 26px; justify-items: center; margin-top: 40px; }
+  .spread.three { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); }
+  .spread.four { grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); max-width: 820px; margin-inline: auto; }
+  .tcard {
+    position: relative; width: min(270px, 100%); aspect-ratio: 7 / 12;
+    perspective: 1400px; cursor: pointer; border: 0; padding: 0; background: none; color: inherit; text-align: left;
+    transform: rotate(var(--tilt, 0deg));
+    transition: transform .5s cubic-bezier(.2,.8,.2,1);
+  }
+  .tcard:hover { transform: rotate(0deg) translateY(-6px); }
+  .tcard .inner { position: absolute; inset: 0; transform-style: preserve-3d; transition: transform .9s cubic-bezier(.3,.7,.2,1); }
+  .tcard.flipped .inner { transform: rotateY(180deg); }
+  .tcard .side { position: absolute; inset: 0; backface-visibility: hidden; -webkit-backface-visibility: hidden; border-radius: 12px; box-shadow: 0 18px 30px -12px #000a, 0 2px 0 #0004; }
+  .tcard .reading {
+    transform: rotateY(180deg);
+    background-color: var(--card); background-image: var(--tex-grain), var(--tex-fox), radial-gradient(120% 90% at 50% 40%, transparent 55%, #b8955a55);
+    color: var(--ink); padding: 22px 20px 18px;
+    display: flex; flex-direction: column; gap: 10px; overflow: hidden;
+    box-shadow: 0 18px 30px -12px #000a, inset 0 0 0 1px var(--card-edge);
+  }
+  .reading .rhead { display: flex; justify-content: space-between; align-items: baseline; font-family: var(--hand); font-weight: 700; font-size: 20px; letter-spacing: .02em; color: var(--oxblood); border-bottom: 1px solid #8e2a3a44; padding-bottom: 6px; }
+  .reading .rhead span:last-child { font-family: var(--glyph); letter-spacing: 0; font-size: 15px; }
+  .reading p { margin: 0; font-family: var(--hand); font-weight: 500; font-size: clamp(20px, 5.4vw, 22px); line-height: 1.22; overflow-wrap: anywhere; }
+  .reading .stamp {
+    margin-top: auto; align-self: flex-end; font-family: var(--hand); font-size: 20px; color: var(--oxblood);
+    transform: rotate(-4deg);
+  }
+  .tcard .hint {
+    position: absolute; left: 50%; bottom: -28px; transform: translateX(-50%);
+    font-family: var(--hand); font-size: 19px; color: var(--muted); white-space: nowrap; pointer-events: none;
+  }
+  .tcard.flipped .hint { opacity: 0; }
+
+  /* reveal: visible at rest, animated only once script marks it ready */
+  .rv { transition: opacity .9s ease, transform .9s cubic-bezier(.2,.8,.2,1); }
+  .js .rv:not(.in) { opacity: 0; transform: translateY(40px); }
+  .js .tcard.rv:not(.in) { transform: translateY(70px) rotate(calc(var(--tilt, 0deg) * 4)); }
+
+  /* ---------- Hero ---------- */
+  #hero { padding-top: 120px; text-align: center; }
+  #hero h1 { font-family: var(--display); font-weight: 400; font-size: clamp(46px, 11vw, 112px); line-height: .98; margin: 14px 0 0; text-wrap: balance; }
+  #hero h1 .emo { font-size: .55em; vertical-align: .25em; -webkit-text-fill-color: initial; color: initial; background: none; }
+  .constel { width: min(520px, 100%); margin: 28px auto 0; display: block; overflow: visible; }
+  .constel line { stroke: var(--gold); stroke-width: 1.2; stroke-linecap: round; }
+  .constel circle { fill: var(--gold-hi); }
+  .constel text { fill: var(--muted); font-family: var(--caps); font-size: 13px; letter-spacing: .18em; }
+  .scroll-cue { margin-top: 24px; font-family: var(--hand); font-size: 22px; color: var(--muted); }
+
+  /* ---------- Paper slip (letter opening) ---------- */
+  .slip {
+    position: relative; color: var(--ink);
+    background-color: var(--card); background-image: var(--tex-grain), var(--tex-fox), linear-gradient(180deg, #fff7e2, transparent 40%);
+    padding: 34px clamp(20px, 5vw, 44px) 30px; border-radius: 3px;
+    box-shadow: 0 30px 50px -25px #000c, 0 1px 0 #fff8 inset;
+    transform: rotate(-.8deg);
+  }
+  .slip::before, .slip::after {
+    content: ""; position: absolute; width: 110px; height: 30px; top: -14px;
+    background: repeating-linear-gradient(45deg, #c7a4d8bb 0 8px, #b48fcabb 8px 16px);
+    box-shadow: 0 1px 2px #0003; opacity: .9;
+  }
+  .slip::before { left: 18px; transform: rotate(-5deg); }
+  .slip::after { right: 18px; transform: rotate(4deg); }
+  .slip p { margin: 0 0 1em; font-size: clamp(17px, 2.4vw, 20px); }
+  .slip p:last-child { margin: 0; }
+
+  /* ---------- Chart wheel (sticky) ---------- */
+  #chart .grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 40px; align-items: start; }
+  #chart .stick { position: sticky; top: calc(env(safe-area-inset-top, 0px) + 60px); }
+  .wheel { width: 100%; max-width: 440px; display: block; margin: 0 auto; overflow: visible; }
+  .wheel .ring { fill: none; stroke: var(--gold); }
+  .wheel .spoke { stroke: var(--gold-lo); }
+  .wheel .sign { font-family: var(--glyph); font-size: 17px; fill: var(--silver); text-anchor: middle; dominant-baseline: central; }
+  .wheel .sign.hot { fill: var(--gold-hi); font-size: 20px; }
+  .wheel .planet { font-family: var(--glyph); font-size: 20px; fill: var(--ink); text-anchor: middle; dominant-baseline: central; }
+  .wheel .pdot { stroke: var(--gold-hi); stroke-width: 1.5; }
+  .wheel .trine { stroke: var(--silver); stroke-width: 1.4; stroke-dasharray: 4 5; fill: none; }
+  .wheel .cap { font-family: var(--caps); font-size: 11px; letter-spacing: .14em; fill: var(--muted); text-anchor: middle; }
+  .wheel-note { text-align: center; font-family: var(--hand); font-size: 20px; color: var(--muted); margin-top: 8px; }
+
+  /* ---------- Portrait card ---------- */
+  .portrait { display: grid; grid-template-columns: minmax(0, 210px) minmax(0, 1fr); gap: 22px; align-items: start; margin-top: 34px; }
+  .portrait .pcard { width: 100%; aspect-ratio: 7 / 12; transform: rotate(-2deg); box-shadow: 0 18px 30px -12px #000a; border-radius: 12px; }
+  .portrait h3 { font-family: var(--hand); font-weight: 700; font-size: 34px; line-height: 1; color: var(--gold-hi); margin: 4px 0 6px; }
+  .portrait .facts { font-family: var(--glyph), var(--body); font-size: 15px; color: var(--muted); margin: 0 0 10px; letter-spacing: .02em; }
+  .portrait p { font-family: var(--hand); font-size: 22px; line-height: 1.25; margin: 0 0 .6em; }
+  @media (max-width: 480px) { .portrait { grid-template-columns: minmax(0, 1fr); } .portrait .pcard { width: min(230px, 70vw); margin: 0 auto; } }
+
+  /* ---------- Long letter: stacked cardstock pages ---------- */
+  .pages { display: grid; gap: 28px; max-width: 700px; margin: 36px auto 0; }
+  .page {
+    position: relative; color: var(--ink);
+    background-color: var(--card); background-image: var(--tex-grain), var(--tex-fox), linear-gradient(180deg, #fff7e2, transparent 40%);
+    padding: 32px clamp(20px, 5vw, 48px) 30px; border-radius: 3px; box-shadow: 0 30px 50px -25px #000c;
+    transform: rotate(var(--tilt, 0deg));
+  }
+  .page h3 { font-family: var(--display); font-style: italic; font-weight: 400; font-size: clamp(24px, 4.4vw, 30px); line-height: 1.15; margin: 0 0 12px; color: var(--oxblood); display: flex; gap: 12px; align-items: baseline; }
+  .page h3 span { font-family: var(--glyph); font-style: normal; font-size: .8em; color: var(--gold-lo); }
+  .page p { font-size: clamp(17px, 2.3vw, 19.5px); margin: 0 0 1em; }
+  .page p:last-child { margin: 0; }
+  .page .sign { font-family: var(--hand); font-size: 32px; color: var(--oxblood); text-align: right; }
+
+  /* ---------- Solar return (sticky orbit) ---------- */
+  #solar { padding-block: 0; height: 260vh; }
+  #solar .stick { position: sticky; top: 0; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; gap: 18px; text-align: center; padding-block: 56px 24px; }
+  .orbit { width: min(360px, 78vw, 46vh); overflow: visible; }
+  .orbit .path { fill: none; stroke: #caa04c40; stroke-width: 1.5; stroke-dasharray: 2 6; }
+  .orbit .trail { fill: none; stroke: url(#trailGrad); stroke-width: 3; stroke-linecap: round; }
+  .orbit .natal { stroke: var(--rose); stroke-width: 2; }
+  .orbit text { font-family: var(--caps); fill: var(--muted); font-size: 12px; letter-spacing: .14em; text-anchor: middle; }
+  .orbit .count { font-family: var(--display); fill: var(--gold-hi); font-size: 54px; letter-spacing: 0; }
+  #solarText { max-width: 40ch; font-size: clamp(18px, 2.6vw, 22px); margin: 0; }
+
+  /* ---------- Gallery ---------- */
+  .gallery { position: relative; margin-top: 30px; }
+  .track { display: flex; transition: transform .6s cubic-bezier(.2,.8,.2,1); touch-action: pan-y; }
+  .viewport { overflow: hidden; padding: 30px 0 40px; }
+  .slide { flex: 0 0 100%; display: flex; justify-content: center; }
+  .polaroid {
+    width: min(330px, 84vw); background: #f7f2e8; background-image: var(--tex-grain);
+    padding: 14px 14px 0; box-shadow: 0 24px 40px -18px #000d; position: relative;
+    transform: rotate(var(--tilt, -2deg));
+  }
+  .polaroid::before {
+    content: ""; position: absolute; top: -13px; left: 50%; width: 96px; height: 26px; transform: translateX(-50%) rotate(-3deg);
+    background: repeating-linear-gradient(90deg, #e9c46acc 0 6px, #f3d68acc 6px 12px); box-shadow: 0 1px 2px #0003;
+  }
+  .polaroid .ph { aspect-ratio: 3 / 4; background: #241b3a; position: relative; overflow: hidden; display: grid; place-items: center; }
+  .polaroid .ph.has { aspect-ratio: auto; background: none; }
+  .polaroid img, .tframe img { display: block; width: 100%; height: auto; max-height: 64vh; object-fit: contain; }
+  .slide { align-items: center; }
+  .tframe {
+    width: min(330px, 84vw); margin: 0; padding: 12px 12px 14px; border-radius: 14px; position: relative;
+    background: #1a1330; box-shadow: inset 0 0 0 5px var(--card), inset 0 0 0 7px var(--gold-lo), 0 24px 40px -18px #000d;
+    transform: rotate(var(--tilt, 1deg));
+  }
+  .tframe .num { font-family: var(--hand); font-size: 22px !important; color: var(--gold-hi); text-align: center; letter-spacing: .14em; font-size: 15px; padding: 6px 0 8px; }
+  .tframe .ph { padding: 0 6px; display: grid; place-items: center; }
+  .tframe .ph img { box-shadow: 0 0 0 1px var(--gold-lo); }
+  .tframe .cap { margin: 10px 6px 0; padding: 4px 6px; text-align: center; background: var(--card); background-image: var(--tex-grain); color: var(--ink); font-family: var(--hand); font-weight: 700; font-size: 21px; min-height: 1.4em; box-shadow: 0 0 0 1px var(--gold-lo); }
+  .polaroid img { width: 100%; height: auto; }
+  .polaroid .empty { text-align: center; color: var(--muted); font-family: var(--hand); font-size: 22px; line-height: 1.2; padding: 16px; }
+  .polaroid .empty svg { width: 74px; height: 74px; display: block; margin: 0 auto 10px; }
+  .polaroid .cap { font-family: var(--hand); font-size: 23px; color: var(--ink); text-align: center; padding: 10px 6px 14px; min-height: 58px; }
+  .gnav { display: flex; justify-content: center; align-items: center; gap: 20px; }
+  .gbtn {
+    width: 48px; height: 48px; border-radius: 50%; border: 1px solid var(--gold); background: #ffffff0d; color: var(--gold-hi);
+    font-size: 22px; cursor: pointer; display: grid; place-items: center;
+  }
+  .gbtn:hover { background: #caa04c22; }
+  .gcount { font-family: var(--caps); letter-spacing: .16em; color: var(--muted); font-variant-numeric: tabular-nums; min-width: 70px; text-align: center; }
+
+  /* ---------- Letter ---------- */
+  .letter {
+    position: relative; max-width: 680px; margin: 0 auto; color: var(--ink);
+    background-color: #f3e8cf; background-image: var(--tex-grain), var(--tex-fox),
+      linear-gradient(180deg, transparent 49.6%, #a0835033 50%, transparent 50.6%);
+    padding: 48px clamp(22px, 6vw, 60px) 60px; border-radius: 2px;
+    box-shadow: 0 40px 60px -30px #000d;
+  }
+  .letter p { font-size: clamp(18px, 2.4vw, 21px); margin: 0 0 1.1em; }
+  .letter .last { font-family: var(--display); font-style: italic; font-size: clamp(24px, 4vw, 32px); line-height: 1.25; }
+  .letter .sign { font-family: var(--hand); font-size: 34px; color: var(--oxblood); text-align: right; margin: 0; }
+  .seal { position: absolute; width: 88px; height: 88px; right: -14px; top: -30px; transform: rotate(12deg); filter: drop-shadow(0 6px 6px #0007); }
+
+  /* ---------- Song ---------- */
+  .song-card {
+    max-width: 520px; margin: 30px auto 0; padding: 14px 16px 12px; display: grid; gap: 8px; border-radius: 14px;
+    background: #ffffff08; box-shadow: inset 0 0 0 1px #caa04c55;
+  }
+  .song-card.nudge { animation: nudge .8s ease 2; }
+  @keyframes nudge { 50% { box-shadow: inset 0 0 0 2px var(--gold-hi), 0 0 30px #caa04c66; } }
+  #songEmbed { min-height: 152px; border-radius: 12px; overflow: hidden; display: grid; place-items: center; }
+  #songLink { display: inline-block; color: var(--gold-hi); font-family: var(--hand); font-size: 22px; }
+  #musicBtn {
+    position: fixed; z-index: 55; width: 52px; height: 52px; border-radius: 50%; cursor: pointer;
+    right: calc(14px + env(safe-area-inset-right, 0px)); bottom: calc(14px + env(safe-area-inset-bottom, 0px));
+    border: 0; padding: 0; background: none; filter: drop-shadow(0 6px 10px #0009);
+  }
+  #musicBtn svg { width: 100%; height: 100%; display: block; }
+  #musicBtn.playing svg { animation: spin 6s linear infinite; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  /* ---------- Message ---------- */
+  .msg { max-width: 620px; margin: 0 auto; }
+  .prompts { display: flex; flex-wrap: wrap; gap: 10px; margin: 0 0 14px; }
+  .prompt { font-family: var(--hand); font-size: 20px; color: var(--muted); border: 1px dashed #b7aac866; border-radius: 999px; padding: 2px 14px; }
+  #wishText {
+    width: 100%; min-height: 190px; resize: vertical; display: block;
+    font: inherit; font-size: 18px; color: var(--ink); line-height: 1.55;
+    padding: 18px 20px; border: 0; border-radius: 3px;
+    background-color: var(--card); background-image: var(--tex-grain), repeating-linear-gradient(180deg, transparent 0 27px, #8e2a3a22 27px 28px);
+    background-position: 0 0, 0 14px; box-shadow: 0 24px 40px -22px #000c;
+  }
+  .row { display: flex; flex-wrap: wrap; gap: 12px; margin-top: 16px; align-items: center; }
+  .cta {
+    font-family: var(--caps); letter-spacing: .1em; font-size: 16px; cursor: pointer;
+    padding: 12px 22px; border-radius: 999px; border: 0; color: var(--ink); background: var(--foil); background-size: 200% 100%;
+    box-shadow: 0 8px 18px -8px #000c;
+  }
+  .cta-alt { background: none; color: var(--gold-hi); box-shadow: inset 0 0 0 1px var(--gold); }
+  #msgStatus { font-family: var(--hand); font-size: 21px; color: var(--muted); min-height: 1.4em; margin: 10px 0 0; }
+  .msg-note { font-size: 15px; color: var(--muted); margin: 6px 0 0; }
+
+  footer { text-align: center; padding-block: 40px 90px; font-family: var(--caps); letter-spacing: .2em; font-size: 13px; color: var(--muted); }
+
+  /* ---------- Trail and bursts ---------- */
+  .trail, .burst { position: fixed; z-index: 70; pointer-events: none; font-family: var(--glyph); line-height: 1; transform: translate(-50%, -50%); }
+  .trail { font-size: 13px; animation: drift 1s ease-out forwards; }
+  .burst { font-size: 17px; animation: pop .95s cubic-bezier(.15,.7,.3,1) forwards; }
+  @keyframes drift { to { opacity: 0; transform: translate(calc(-50% + var(--dx)), calc(-50% + var(--dy))) scale(.3); } }
+  @keyframes pop { 0% { opacity: 1; transform: translate(-50%, -50%) scale(.4); } 100% { opacity: 0; transform: translate(calc(-50% + var(--x)), calc(-50% + var(--y))) scale(1.1) rotate(160deg); } }
+
+  @media (max-width: 760px) {
+    section { padding-block: 72px; }
+    #chart .grid { grid-template-columns: minmax(0, 1fr); }
+    #chart .stick { position: relative; top: 0; }
+    .tcard { --tilt: 0deg !important; }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    *, *::before, *::after { animation: none !important; transition-duration: .01ms !important; }
+    .js .rv:not(.in), .js .tcard.rv:not(.in) { opacity: 1; transform: none; }
+    #solar { height: auto; }
+    #solar .stick { position: relative; height: auto; padding-block: 72px; }
+  }
+</style>
+</head>
+<body>
+
+<div class="sky" aria-hidden="true"><i id="sky1"></i><i id="sky2"></i><i id="sky3"></i></div>
+<div class="progress" aria-hidden="true"><b id="progBar"></b><svg id="progMoon" viewBox="0 0 16 16"><circle cx="8" cy="8" r="6.5" fill="#f6dc94"/><circle cx="11" cy="6.5" r="5.8" fill="#1b1430"/></svg></div>
+
+<!-- Intro: tap the deck, the top card turns over, the music starts -->
+<div id="intro" role="button" tabindex="0" aria-label="Draw a card to open the page">
+  <p class="lead foil" id="introLead"></p>
+  <div class="deck" aria-hidden="true">
+    <div class="back cardback" id="deckB1"></div>
+    <div class="back cardback" id="deckB2"></div>
+    <div class="back cardback" id="deckB3"></div>
+    <div class="top">
+      <div class="cardback" id="deckTop"></div>
+      <div class="face" id="deckFace"></div>
+    </div>
+  </div>
+  <p class="sub" id="introSub"></p>
+</div>
+
+<main>
+  <section id="hero">
+    <div class="wrap">
+      <div class="eyebrow" id="heroEyebrow"></div>
+      <h1 id="greeting"></h1>
+      <svg class="constel" id="constel" viewBox="0 0 520 200" aria-hidden="true"></svg>
+      <div class="song-card">
+        <div class="eyebrow" id="songEyebrow"></div>
+        <div id="songEmbed"></div>
+        <a id="songLink" target="_blank" rel="noopener"></a>
+      </div>
+      <div class="scroll-cue" id="scrollCue"></div>
+    </div>
+  </section>
+
+  <section id="opening">
+    <div class="wrap"><div class="slip rv prose" id="openingText" style="margin:0 auto"></div></div>
+  </section>
+
+  <section id="chart">
+    <div class="wrap grid">
+      <div class="stick">
+        <svg class="wheel" id="wheel" viewBox="-180 -180 360 360" role="img" aria-label="A birth chart wheel with the Sun in Scorpio and the Moon in Cancer"></svg>
+        <div class="wheel-note" id="wheelNote"></div>
+      </div>
+      <div class="rv">
+        <div class="eyebrow" id="chartEyebrow"></div>
+        <h2 class="foil" id="chartTitle"></h2>
+        <div class="prose" id="crashText"></div>
+        <div class="portrait">
+          <div class="pcard" id="portraitCard"></div>
+          <div>
+            <h3 id="portraitName"></h3>
+            <p class="facts" id="portraitFacts"></p>
+            <div id="portraitText"></div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="findings">
+    <div class="wrap">
+      <div class="eyebrow" id="findEyebrow"></div>
+      <h2 class="foil" id="findTitle"></h2>
+      <div class="spread three" id="findSpread"></div>
+    </div>
+  </section>
+
+  <section id="ship">
+    <div class="wrap">
+      <div class="eyebrow" id="shipEyebrow"></div>
+      <h2 class="foil" id="shipTitle"></h2>
+      <div class="spread four" id="shipSpread"></div>
+    </div>
+  </section>
+
+  <section id="solar">
+    <div class="stick wrap">
+      <div class="eyebrow" id="solarEyebrow"></div>
+      <svg class="orbit" id="orbit" viewBox="-170 -170 340 340" aria-hidden="true">
+        <defs>
+          <linearGradient id="trailGrad" x1="0" x2="1"><stop offset="0" stop-color="#8a6424"/><stop offset="1" stop-color="#fff0bd"/></linearGradient>
+          <radialGradient id="sunGrad"><stop offset="0" stop-color="#fff6d6"/><stop offset=".6" stop-color="#f1c45a"/><stop offset="1" stop-color="#c58a2e"/></radialGradient>
+        </defs>
+        <circle class="path" r="140"/>
+        <path class="trail" id="orbitTrail" d="M0,-140 A140,140 0 1 1 -0.01,-140"/>
+        <line class="natal" x1="0" y1="-128" x2="0" y2="-152"/>
+        <text id="natalLabel" y="-160"></text>
+        <text class="count" id="lapCount" y="18"></text>
+        <text id="lapLabel" y="44"></text>
+        <g id="orbitSun"><circle r="15" fill="url(#sunGrad)"/><circle r="22" fill="#f6dc9433"/></g>
+      </svg>
+      <p id="solarText"></p>
+    </div>
+  </section>
+
+  <section id="reading">
+    <div class="wrap">
+      <div class="eyebrow" id="readEyebrow"></div>
+      <h2 class="foil" id="readTitle"></h2>
+      <div class="pages" id="readPages"></div>
+    </div>
+  </section>
+
+  <section id="photos">
+    <div class="wrap">
+      <div class="eyebrow" id="galEyebrow"></div>
+      <h2 class="foil" id="galTitle"></h2>
+      <div class="gallery">
+        <div class="viewport" id="galView"><div class="track" id="galTrack"></div></div>
+        <div class="gnav">
+          <button class="gbtn" id="galPrev" type="button" aria-label="Previous photo">&#8249;</button>
+          <span class="gcount" id="galCount"></span>
+          <button class="gbtn" id="galNext" type="button" aria-label="Next photo">&#8250;</button>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section id="letter">
+    <div class="wrap">
+      <div class="letter rv" id="letterBox">
+        <svg class="seal" viewBox="0 0 100 100" aria-hidden="true">
+          <path d="M50 4c8 0 10 6 17 8s13-1 17 6-1 12 2 19 9 9 8 17-8 9-10 16 3 13-3 18-12 1-18 5-8 10-16 10-10-6-17-8-13 1-17-6 1-12-2-19-9-9-8-17 8-9 10-16-3-13 3-18 12-1 18-5 8-10 16-10z" fill="#8e2a3a"/>
+          <circle cx="50" cy="52" r="30" fill="none" stroke="#6a1b28" stroke-width="3"/>
+          <text x="50" y="54" text-anchor="middle" dominant-baseline="central" font-size="34" fill="#c25a68" font-family="Noto Sans Symbols, Segoe UI Symbol, sans-serif">&#9807;&#65038;</text>
+        </svg>
+        <div id="letterText"></div>
+      </div>
+    </div>
+  </section>
+
+  <section id="message">
+    <div class="wrap msg">
+      <div class="eyebrow" id="msgEyebrow"></div>
+      <h2 class="foil" id="msgTitle"></h2>
+      <div class="prompts" id="prompts"></div>
+      <label for="wishText" class="eyebrow" style="display:block;margin-bottom:8px" id="msgLabel"></label>
+      <textarea id="wishText"></textarea>
+      <div class="row">
+        <button class="cta" id="sendBtn" type="button"></button>
+        <button class="cta cta-alt" id="copyBtn" type="button"></button>
+      </div>
+      <p id="msgStatus" aria-live="polite"></p>
+      <p class="msg-note" id="msgNote"></p>
+    </div>
+  </section>
+
+  <footer id="footer"></footer>
+</main>
+
+<button id="musicBtn" type="button" aria-label="Play or pause the song" hidden>
+  <svg viewBox="0 0 52 52" aria-hidden="true">
+    <defs><linearGradient id="coin" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fff0bd"/><stop offset=".45" stop-color="#caa04c"/><stop offset="1" stop-color="#8a6424"/></linearGradient></defs>
+    <circle cx="26" cy="26" r="25" fill="url(#coin)"/>
+    <circle cx="26" cy="26" r="20" fill="none" stroke="#8a6424" stroke-width="1" stroke-dasharray="2 3"/>
+    <circle cx="26" cy="26" r="11" fill="#1b1430"/>
+    <circle cx="29.5" cy="23.5" r="9" fill="url(#coin)"/>
+    <circle cx="26" cy="26" r="2.2" fill="#1b1430"/>
+  </svg>
+</button>
+
+<script>
+/* =========================================================
+   CONFIG: edit everything here. No layout code needs to change.
+   ========================================================= */
+const CONFIG = {
+  pageTitle: "Tonyo's Solar Return",
+
+  // The send button opens a Gmail draft to this address with his message filled in
+  EMAIL_TO: 'princessrico2004@gmail.com',
+  EMAIL_SUBJECT: 'a birthday message from Tonyo',
+
+  // Spotify track ID: the code after /track/ in a Spotify share link
+  SPOTIFY_TRACK_ID: '6FIEuf1JIzmCtach0gXpeG',   // "Tadhana" (destiny) by Up Dharma Down
+
+  intro: {
+    lead: 'Tonyo, draw a card',
+    sub: 'tap the deck',
+    card: { num: 'XXV', name: 'The Birthday', art: 'birthday' }
+  },
+
+  hero: {
+    eyebrow: 'solar return no. 25',
+    greeting: 'Happy 25th birthday, Tonyo!',
+    greetingEmoji: '🎂🦂',
+    constellation: 'scorpius',
+    cue: 'scroll down, birthday boy'
+  },
+
+  // Her letter, word for word. Each line below is one paragraph or one bullet.
+  letter: {
+    opening: [
+      "I know you don't care about astrology even a little bit, which is exactly why I'm making you read this. Consider it part of your gift. 😌 (It's just for fun, I promise.)"
+    ],
+    chart: {
+      eyebrow: 'a crash course',
+      title: 'Your birth chart',
+      text: [
+        'Quick crash course: a birth chart is a map of where the sun, moon, and planets were in the sky the exact minute you were born. Astrology people believe each spot says something about your personality. So I made yours. Here are the official findings:'
+      ],
+      note: 'sun in ♏︎, moon in ♋︎, a trine apart'
+    },
+    findings: {
+      eyebrow: 'the reading',
+      title: 'Here are the official findings',
+      cards: [
+        { num: '☉︎', name: 'The Sun in Scorpio', art: 'sun', glyph: '♏︎', head: 'your sun',
+          text: '🦂 Sun in Scorpio: your main personality. Private, intense, and super loyal, and when you love, you go all in. ✔️ Confirmed.' },
+        { num: '☽︎', name: 'The Moon in Cancer', art: 'moon', glyph: '♋︎', head: 'your moon',
+          text: "🌙 Moon in Cancer: your emotional side. A soft heart that takes care of people and loves home and comfort. So you're tough on the outside and a big softie inside. ✔️ Also confirmed, don't deny it." },
+        { num: 'XI', roman: true, name: 'The Intuitive', art: 'eleven', glyph: '11', head: 'life path',
+          text: '🔢 Your "life path number" is 11. You get it by adding up all the digits of your birthday. It\'s called "the intuitive one," which means you should have known I was planning this.' }
+      ]
+    },
+    ship: {
+      eyebrow: 'the compatibility spread',
+      title: 'Now the cute part, where the stars ship us:',
+      cards: [
+        { num: 'DSC', roman: true, name: 'The Partner Point', art: 'partner', glyph: '☉︎ ☌ DSC', head: 'my person',
+          text: "💞 Everyone's chart has a \"partner point\" that's supposed to show the kind of person you end up with. Your sun lands almost exactly on mine. So according to the sky, you're literally my person. The universe basically assigned you to me." },
+        { num: '♃︎', name: 'The Lucky Charm', art: 'jupiter', glyph: '♃︎ ☌ ☽︎', head: 'jupiter',
+          text: "🍀 My lucky planet, Jupiter, lines up almost perfectly with your emotional side. That's supposed to mean I bring you comfort and good luck. So I'm officially your lucky charm. You're welcome. 😌" },
+        { num: '♄︎', name: 'The Promise', art: 'saturn', glyph: '♄︎ in ♋︎', head: 'commitment',
+          text: '🤝 My planet of commitment sits in the same sign as your emotions. Astrology says that\'s the kind of match that makes a relationship serious and long-lasting. Basically, the astrology version of "you\'re stuck with me."' },
+        { num: 'VI', roman: true, name: 'The Lovers', art: 'lovers', glyph: '11 + 4', head: 'numerology',
+          text: '🔢 Your number is 11 and mine is 4. 11 + 4 = 15, then 1 + 5 = 6, which is "The Lovers" in tarot. It\'s science. (It\'s not science.)' }
+      ],
+      hint: 'tap to read',
+      stamp: '✦ read ✦'
+    },
+    solar: {
+      eyebrow: 'one more thing',
+      natal: 'where you started',
+      lapLabel: 'solar return',
+      text: 'Also, your birthday is called your "solar return," which is basically the start of your personal new year in astrology. So happy new year, I guess? 🎆'
+    },
+    realTalk: [
+      "But real talk: I don't need the stars to tell me any of this. You've been my safe place for three years, and I see your loyalty and your soft heart every single day. 25 looks really good on you. I hope this year brings you everything you've been working so hard for, and I'll be right here cheering you on."
+    ],
+    closing: 'Happy birthday, my love. I love you so much. 💕',
+    sign: 'Yezsa'
+  },
+
+  // His own card, beside the birth chart
+  portrait: {
+    card: { num: 'XXV', name: 'Tonyo', art: 'tonyo' },
+    name: 'Anthony, a.k.a. Tonyo',
+    facts: 'sun ♏︎ scorpio · moon ♋︎ cancer · life path 11',
+    text: [
+      'The card of the quiet one who feels everything.',
+      "Upright, it means loyalty that doesn't need an audience, a soft heart kept safe behind a straight face, and a gut feeling that is almost always right.",
+      "Reversed, it means he's hungry. Feed him."
+    ]
+  },
+
+  // The long letter: the full reading. A draft in Yezsa's voice, edit freely.
+  reading: {
+    eyebrow: 'a longer letter',
+    title: 'The full reading',
+    pages: [
+      { glyph: '', title: 'Dear Tonyo,', text: [
+        "Okay, since you made it this far, you get the long version. I promise there's no quiz at the end.",
+        "I know the cards and the planets are a little silly. But I wanted an excuse to tell you everything I see in you, and the sky happened to agree with me on most of it."
+      ] },
+      { glyph: '☉︎ ♏︎', title: 'What your sun says', text: [
+        "Scorpio is the sign of depth. Scorpios are supposed to be the ones who notice everything and say only half of it. They don't trust easily, but once they do, it's for keeps.",
+        "That's you. You don't make a big show of caring. You just show up, again and again, and you remember the small things I forget I even told you."
+      ] },
+      { glyph: '☽︎ ♋︎', title: 'What your moon says', text: [
+        "Your moon is in Cancer, the sign that rules home. People with a Cancer moon feel safest when the people they love are fed, warm, and okay.",
+        "They guard their soft side the way a crab guards its shell, so only a few people ever get to see it. I'm really lucky that I'm one of them."
+      ] },
+      { glyph: '11', title: 'What your number means', text: [
+        "Eleven is called a master number. It's one of the few that numerology doesn't add down to a single digit, and it's linked to intuition and to being a calm presence for other people.",
+        "Which explains why you can tell when something's wrong with me before I say a word."
+      ] },
+      { glyph: '☉︎ ↺', title: 'What 25 has in store', text: [
+        "Every birthday, the sun comes back to the exact spot it was in when you were born, and astrology says the year that starts there has its own theme.",
+        "For you at 25, I'm calling it now: this is a year of building. The work you've been quietly putting in starts to show. You get to be proud of yourself, out loud, for once.",
+        "And you'll have someone next to you the whole way, because the stars already said so, and I'm not about to argue with the stars."
+      ] },
+      { glyph: '♥︎', title: 'Why I love you (no astrology needed)', text: [
+        "I love that you're the same person with me as you are with everyone else, just softer. I love how loyal you are, to me, to your family, and to your friends.",
+        "I love that you listen. I love that when things get heavy, you don't panic, you just hold my hand and figure it out with me. I love that you let me be silly and never make me feel like too much.",
+        "I love that three years with you feels like no time at all and also like forever."
+      ] },
+      { glyph: '✦', title: 'One last prediction', text: [
+        "You don't believe in any of this, and that's okay. I believe in you enough for both of us.",
+        "So here's the one prediction I'd actually bet on: 25 is going to be good to you, because you're so good to everyone around you. And I'll be there for all of it."
+      ], sign: 'Love always, Yezsa' }
+    ]
+  },
+
+  // Photos: put files in photos/ and list them here. Leave src empty for a placeholder.
+  // Each photo is shown whole, never cropped. Frames alternate: a polaroid, then a tarot card.
+  gallery: {
+    eyebrow: 'proof',
+    title: '25 looks really good on you',
+    photos: [
+      { src: 'photos/01.jpeg', caption: '' },
+      { src: 'photos/02.jpeg', caption: '' },
+      { src: 'photos/03.jpeg', caption: '' },
+      { src: 'photos/04.jpeg', caption: '' },
+      { src: 'photos/05.png', caption: '' },
+      { src: 'photos/06.png', caption: '' },
+      { src: 'photos/07.jpeg', caption: '' },
+      { src: 'photos/08.jpeg', caption: '' },
+      { src: 'photos/09.jpeg', caption: '' },
+      { src: 'photos/10.jpeg', caption: '' },
+      { src: 'photos/11.jpeg', caption: '' },
+      { src: 'photos/12.jpeg', caption: '' },
+      { src: 'photos/13.jpeg', caption: '' },
+      { src: 'photos/14.jpeg', caption: '' },
+      { src: 'photos/15.jpeg', caption: '' },
+      { src: 'photos/16.jpeg', caption: '' }
+    ],
+    placeholder: 'photo coming soon'
+  },
+
+  song: {
+    eyebrow: 'now playing · tadhana, up dharma down',
+    linkText: 'open it on Spotify'
+  },
+
+  message: {
+    eyebrow: 'your turn',
+    title: 'Write back to me',
+    label: 'your message',
+    prompts: ['a wish for 25...', 'what you want this year to look like...'],
+    placeholder: 'write your message here...',
+    sendLabel: 'send to Yezsa in Gmail',
+    copyLabel: 'copy message',
+    note: 'Gmail opens with your message ready to send to Yezsa. Just tap send there.',
+    status: {
+      empty: 'write something first, then tap again',
+      sending: 'opening Gmail...',
+      sent: "Gmail is open. Tap send there and it goes to Yezsa",
+      failed: 'Gmail did not open here. Use copy message and send it to princessrico2004@gmail.com',
+      copyEmpty: 'write something first',
+      copied: 'copied. paste it into a message to Yezsa',
+      copyFailed: 'copy did not work here, so select the text and copy it yourself'
+    }
+  },
+
+  footer: 'made for Tonyo · solar return no. 25'
+};
+
+/* =========================================================
+   Below this line: layout code. No need to edit.
+   ========================================================= */
+document.documentElement.classList.add('js');
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const $ = (id) => document.getElementById(id);
+const el = (tag, cls, text) => { const n = document.createElement(tag); if (cls) n.className = cls; if (text != null) n.textContent = text; return n; };
+const svgNS = 'http://www.w3.org/2000/svg';
+const sv = (tag, attrs) => { const n = document.createElementNS(svgNS, tag); for (const k in attrs) n.setAttribute(k, attrs[k]); return n; };
+let uid = 0;
+
+/* ---------- Original illustrations ---------- */
+function starsSVG(seed, n, h) {
+  let s = seed, out = '';
+  const r = () => (s = (s * 9301 + 49297) % 233280) / 233280;
+  for (let i = 0; i < n; i++) {
+    const x = (r() * 190 + 5).toFixed(1), y = (r() * h + 4).toFixed(1), k = r();
+    out += k > .82
+      ? `<path d="M${x} ${+y - 4}l1 3 3 1-3 1-1 3-1-3-3-1 3-1z" fill="#f6dc94"/>`
+      : `<circle cx="${x}" cy="${y}" r="${(k * 1.1 + .4).toFixed(2)}" fill="#efe6d3" opacity="${(.4 + k * .6).toFixed(2)}"/>`;
+  }
+  return out;
+}
+
+const ART = {
+  back(p) {
+    let rays = '';
+    for (let i = 0; i < 16; i++) {
+      const a = i * Math.PI / 8, r1 = 26, r2 = i % 2 ? 38 : 46;
+      rays += `<line x1="${100 + r1 * Math.cos(a)}" y1="${150 + r1 * Math.sin(a)}" x2="${100 + r2 * Math.cos(a)}" y2="${150 + r2 * Math.sin(a)}" stroke="url(#${p}f)" stroke-width="1.6"/>`;
+    }
+    return `<svg class="art" viewBox="0 0 200 300" preserveAspectRatio="xMidYMid slice"><defs>
+      <linearGradient id="${p}f" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#8a6424"/><stop offset=".35" stop-color="#f6dc94"/><stop offset=".6" stop-color="#caa04c"/><stop offset="1" stop-color="#fff0bd"/></linearGradient>
+      <pattern id="${p}l" width="20" height="20" patternUnits="userSpaceOnUse"><path d="M10 0L20 10 10 20 0 10z" fill="none" stroke="#caa04c" stroke-opacity=".28" stroke-width=".7"/><circle cx="10" cy="10" r=".9" fill="#caa04c" opacity=".5"/></pattern></defs>
+      <rect width="200" height="300" fill="#191230"/><rect x="10" y="10" width="180" height="280" rx="6" fill="url(#${p}l)"/>
+      <rect x="8" y="8" width="184" height="284" rx="8" fill="none" stroke="url(#${p}f)" stroke-width="2"/>
+      <rect x="14" y="14" width="172" height="272" rx="5" fill="none" stroke="url(#${p}f)" stroke-width=".8"/>
+      <circle cx="100" cy="150" r="54" fill="#191230" stroke="url(#${p}f)" stroke-width="1.4"/>
+      ${rays}<circle cx="100" cy="150" r="22" fill="url(#${p}f)"/><circle cx="108" cy="145" r="19" fill="#191230"/>
+      <path d="M100 40l3 9 9 3-9 3-3 9-3-9-9-3 9-3z M100 236l3 9 9 3-9 3-3 9-3-9-9-3 9-3z" fill="url(#${p}f)"/>
+      <circle cx="40" cy="150" r="3" fill="url(#${p}f)"/><circle cx="160" cy="150" r="3" fill="url(#${p}f)"/></svg>`;
+  },
+
+  birthday(p) {
+    let dots = '';
+    for (let i = 0; i < 12; i++) { const a = Math.PI + i * Math.PI / 11; dots += `<circle cx="${100 + 78 * Math.cos(a)}" cy="${150 + 70 * Math.sin(a)}" r="${i % 3 ? 1.6 : 2.6}" fill="#f6dc94"/>`; }
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet">${starsSVG(7, 26, 120)}${dots}
+      <ellipse cx="100" cy="236" rx="70" ry="9" fill="#0007"/>
+      <rect x="40" y="178" width="120" height="56" rx="6" fill="#e79aa6"/>
+      <path d="M40 186q10 14 20 0t20 0 20 0 20 0 20 0 20 0v-6H40z" fill="#fbeedd"/>
+      <rect x="56" y="134" width="88" height="46" rx="6" fill="#efe3c8"/>
+      <path d="M56 141q8 11 16 0t16 0 16 0 16 0 16 0 16 0v-6H56z" fill="#8e2a3a"/>
+      <g fill="#caa04c"><circle cx="52" cy="210" r="2.2"/><circle cx="72" cy="220" r="2.2"/><circle cx="96" cy="208" r="2.2"/><circle cx="122" cy="222" r="2.2"/><circle cx="146" cy="210" r="2.2"/></g>
+      <text x="82" y="128" font-family="IM Fell English, Georgia, serif" font-size="46" fill="#f6dc94" text-anchor="middle">2</text>
+      <text x="118" y="128" font-family="IM Fell English, Georgia, serif" font-size="46" fill="#f6dc94" text-anchor="middle">5</text>
+      <g transform="translate(0 10)"><path d="M82 82c-5-7 0-13 0-17 5 5 6 11 0 17z M118 82c-5-7 0-13 0-17 5 5 6 11 0 17z" fill="#ffb347"/>
+      <path d="M82 80c-2-3 0-6 0-8 2 2 3 5 0 8z M118 80c-2-3 0-6 0-8 2 2 3 5 0 8z" fill="#fff3c4"/>
+      <circle cx="82" cy="74" r="14" fill="#ffd56b" opacity=".18"/><circle cx="118" cy="74" r="14" fill="#ffd56b" opacity=".18"/><path d="M82 82v6M118 82v6" stroke="#efe3c8" stroke-width="1.5"/></g></svg>`;
+  },
+
+  sun(p) {
+    let rays = '', legs = '';
+    for (let i = 0; i < 24; i++) {
+      const a = i * Math.PI / 12, w = Math.PI / 60, R = i % 2 ? 70 : 84;
+      rays += `<path d="M${100 + 56 * Math.cos(a - w)} ${100 + 56 * Math.sin(a - w)}L${100 + R * Math.cos(a)} ${100 + R * Math.sin(a)}L${100 + 56 * Math.cos(a + w)} ${100 + 56 * Math.sin(a + w)}z" fill="#e9b949"/>`;
+    }
+    for (let i = 0; i < 4; i++) {
+      const y = 140 + i * 8;
+      legs += `<path d="M88 ${y}L72 ${y - 6 + i * 3}L64 ${y + 6 + i * 4}M112 ${y}L128 ${y - 6 + i * 3}L136 ${y + 6 + i * 4}" fill="none" stroke="#5c1622" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>`;
+    }
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet"><defs><radialGradient id="${p}g" cx="45%" cy="40%" r="60%"><stop offset="0" stop-color="#fff3c4"/><stop offset=".55" stop-color="#f1c45a"/><stop offset="1" stop-color="#b9782a"/></radialGradient></defs>
+      ${starsSVG(3, 30, 250)}${rays}<circle cx="100" cy="100" r="56" fill="url(#${p}g)"/>
+      ${legs}
+      <path d="M100 170C100 196 108 212 122 216C138 220 150 208 148 190C146 178 137 172 129 176" fill="none" stroke="#5c1622" stroke-width="11" stroke-linecap="round"/>
+      <path d="M100 170C100 196 108 212 122 216C138 220 150 208 148 190C146 178 137 172 129 176" fill="none" stroke="#8e2a3a" stroke-width="7" stroke-linecap="round" stroke-dasharray="9 2.5"/>
+      <path d="M129 176q-11-1-15-12q9 3 17 4z" fill="#5c1622"/>
+      <path d="M92 120C80 114 72 104 70 92M108 120C120 114 128 104 130 92" fill="none" stroke="#5c1622" stroke-width="5" stroke-linecap="round"/>
+      <ellipse cx="67" cy="82" rx="8" ry="12" transform="rotate(-16 67 82)" fill="#8e2a3a" stroke="#5c1622" stroke-width="1.5"/>
+      <ellipse cx="133" cy="82" rx="8" ry="12" transform="rotate(16 133 82)" fill="#8e2a3a" stroke="#5c1622" stroke-width="1.5"/>
+      <path d="M64 70l3 13M136 70l-3 13" stroke="#f1c45a" stroke-width="2.4"/>
+      <ellipse cx="100" cy="148" rx="15" ry="24" fill="#8e2a3a" stroke="#5c1622" stroke-width="1.5"/>
+      <path d="M86 140q14 6 28 0M86 150q14 6 28 0M87 160q13 5 26 0" fill="none" stroke="#5c1622" stroke-width="1.3"/>
+      <ellipse cx="100" cy="121" rx="11" ry="9" fill="#8e2a3a" stroke="#5c1622" stroke-width="1.5"/>
+      <circle cx="96" cy="117" r="1.5" fill="#f6dc94"/><circle cx="104" cy="117" r="1.5" fill="#f6dc94"/></svg>`;
+  },
+
+  moon(p) {
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet"><defs>
+      <radialGradient id="${p}s" cx="35%" cy="35%" r="70%"><stop offset="0" stop-color="#ffffff"/><stop offset=".6" stop-color="#c3cfdf"/><stop offset="1" stop-color="#7d8aa3"/></radialGradient>
+      <mask id="${p}m"><rect width="200" height="260" fill="#fff"/><circle cx="122" cy="72" r="44" fill="#000"/></mask>
+      <radialGradient id="${p}w"><stop offset="0" stop-color="#ffd56b" stop-opacity=".6"/><stop offset="1" stop-color="#ffd56b" stop-opacity="0"/></radialGradient></defs>
+      ${starsSVG(11, 30, 160)}
+      <circle cx="100" cy="84" r="50" fill="url(#${p}s)" mask="url(#${p}m)"/>
+      <circle cx="74" cy="76" r="5" fill="#9aa7bf" mask="url(#${p}m)"/><circle cx="66" cy="102" r="3.5" fill="#9aa7bf" mask="url(#${p}m)"/>
+      <path d="M0 196Q100 160 200 196V260H0z" fill="#2b2347"/>
+      <circle cx="100" cy="182" r="30" fill="url(#${p}w)"/>
+      <rect x="84" y="170" width="32" height="26" fill="#e9d9b8"/>
+      <path d="M79 172L100 153 121 172z" fill="#8e2a3a"/>
+      <rect x="89" y="178" width="9" height="9" fill="#ffd56b"/><rect x="104" y="181" width="7" height="15" fill="#6b4a33"/>
+      <rect x="110" y="156" width="5" height="10" fill="#6b4a33"/>
+      <g transform="translate(46 196)"><ellipse rx="9" ry="5.5" fill="#c0503f"/><circle cx="-11" cy="-6" r="3.5" fill="#c0503f"/><circle cx="11" cy="-6" r="3.5" fill="#c0503f"/>
+        <path d="M-7 3l-5 4M-3 4l-3 5M3 4l3 5M7 3l5 4" stroke="#c0503f" stroke-width="1.6" stroke-linecap="round"/><circle cx="-3" cy="-5" r="1.2" fill="#fff"/><circle cx="3" cy="-5" r="1.2" fill="#fff"/></g>
+      <path d="M0 220q12-7 25 0t25 0 25 0 25 0 25 0 25 0 25 0 25 0M0 234q12-7 25 0t25 0 25 0 25 0 25 0 25 0 25 0 25 0M0 248q12-7 25 0t25 0 25 0 25 0 25 0 25 0 25 0 25 0" fill="none" stroke="#c3cfdf" stroke-opacity=".7" stroke-width="1.5"/></svg>`;
+  },
+
+  eleven(p) {
+    let rays = '';
+    for (let i = 0; i < 14; i++) { const a = Math.PI + i * Math.PI / 13; rays += `<line x1="${100 + 36 * Math.cos(a)}" y1="${128 + 32 * Math.sin(a)}" x2="${100 + 50 * Math.cos(a)}" y2="${128 + 46 * Math.sin(a)}" stroke="#f6dc94" stroke-width="1.4" stroke-linecap="round"/>`; }
+    const pillar = (x, c, d) => `<rect x="${x}" y="58" width="22" height="168" fill="${c}"/><rect x="${x - 4}" y="50" width="30" height="10" fill="${d}"/><rect x="${x - 4}" y="224" width="30" height="10" fill="${d}"/>
+      <path d="M${x + 6} 64V220M${x + 11} 64V220M${x + 16} 64V220" stroke="${d}" stroke-opacity=".5" stroke-width="1"/>`;
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet">${starsSVG(23, 26, 250)}
+      <path d="M0 234H200V260H0z" fill="#2b2347"/>
+      ${pillar(38, '#efe3c8', '#b49a6a')}${pillar(140, '#c3cfdf', '#7d8aa3')}
+      ${rays}
+      <path d="M66 128Q100 96 134 128Q100 160 66 128z" fill="#efe3c8" stroke="#caa04c" stroke-width="2"/>
+      <circle cx="100" cy="128" r="13" fill="#3b6f8f"/><circle cx="100" cy="128" r="6" fill="#241c2e"/><circle cx="104" cy="124" r="2.4" fill="#fff"/>
+      <path d="M100 170l3 8 8 3-8 3-3 8-3-8-8-3 8-3z" fill="#f6dc94"/>
+      <path d="M100 30a12 12 0 1 0 9 20a10 10 0 1 1-9-20z" fill="#c3cfdf"/></svg>`;
+  },
+
+  partner(p) {
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet"><defs>
+      <radialGradient id="${p}a" cx="40%" cy="40%"><stop offset="0" stop-color="#fff3c4"/><stop offset="1" stop-color="#e2a83f"/></radialGradient>
+      <radialGradient id="${p}b" cx="60%" cy="40%"><stop offset="0" stop-color="#ffe3e8"/><stop offset="1" stop-color="#d9798a"/></radialGradient>
+      <clipPath id="${p}c"><circle cx="84" cy="128" r="36"/></clipPath>
+      <linearGradient id="${p}r" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#f6dc94" stop-opacity=".5"/><stop offset="1" stop-color="#f6dc94" stop-opacity="0"/></linearGradient></defs>
+      ${starsSVG(41, 28, 120)}
+      <path d="M0 164H200V260H0z" fill="#221a3d"/>
+      <circle cx="84" cy="128" r="36" fill="url(#${p}a)"/>
+      <circle cx="116" cy="128" r="36" fill="url(#${p}b)" opacity=".92"/>
+      <circle cx="116" cy="128" r="36" fill="#fff4d6" clip-path="url(#${p}c)"/>
+      <rect x="0" y="163" width="200" height="2" fill="#caa04c"/>
+      <path d="M48 170H152L136 250H64z" fill="url(#${p}r)"/>
+      <g stroke="#f6dc94" stroke-opacity=".55" stroke-width="2" stroke-linecap="round"><path d="M60 186h80M70 200h60M78 214h44M86 228h28"/></g>
+      <path d="M22 158l-8 6 8 6" fill="none" stroke="#c3cfdf" stroke-width="1.6"/>
+      <text x="30" y="160" font-family="IM Fell English SC, Georgia, serif" font-size="10" fill="#c3cfdf" letter-spacing="1.5">west</text></svg>`;
+  },
+
+  jupiter(p) {
+    const heart = (r) => `<path transform="translate(100 196) rotate(${r})" d="M0 0C-4-6-16-8-16-18C-16-25-6-28 0-20C6-28 16-25 16-18C16-8 4-6 0 0z" fill="#4f8a55" stroke="#2f5e36" stroke-width="1.2"/>`;
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet"><defs>
+      <clipPath id="${p}c"><circle cx="92" cy="96" r="50"/></clipPath>
+      <radialGradient id="${p}sh" cx="30%" cy="30%" r="80%"><stop offset=".55" stop-color="#000" stop-opacity="0"/><stop offset="1" stop-color="#000" stop-opacity=".45"/></radialGradient>
+      <mask id="${p}m"><rect width="200" height="260" fill="#fff"/><circle cx="168" cy="40" r="15" fill="#000"/></mask></defs>
+      ${starsSVG(5, 28, 250)}
+      <g clip-path="url(#${p}c)"><rect x="40" y="40" width="110" height="120" fill="#efd6ad"/>
+        <rect x="40" y="62" width="110" height="10" fill="#c98b5a"/><rect x="40" y="80" width="110" height="6" fill="#e8c99a"/>
+        <rect x="40" y="92" width="110" height="14" fill="#b06f45"/><rect x="40" y="112" width="110" height="7" fill="#d9a877"/>
+        <rect x="40" y="126" width="110" height="9" fill="#c98b5a"/><ellipse cx="110" cy="112" rx="11" ry="6" fill="#a8452f"/>
+        <circle cx="92" cy="96" r="50" fill="url(#${p}sh)"/></g>
+      <circle cx="160" cy="46" r="17" fill="#c3cfdf" mask="url(#${p}m)"/>
+      <path d="M134 66L152 56" stroke="#f6dc94" stroke-width="1.4" stroke-dasharray="2 3"/>
+      ${heart(0)}${heart(90)}${heart(180)}${heart(270)}
+      <path d="M100 196C104 214 112 226 122 236" fill="none" stroke="#2f5e36" stroke-width="3" stroke-linecap="round"/>
+      <circle cx="100" cy="196" r="3" fill="#a8d5a0"/></svg>`;
+  },
+
+  saturn(p) {
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet"><defs>
+      <radialGradient id="${p}g" cx="35%" cy="35%" r="75%"><stop offset="0" stop-color="#fbe7b8"/><stop offset=".7" stop-color="#d9b36b"/><stop offset="1" stop-color="#8a6424"/></radialGradient>
+      <mask id="${p}m"><rect width="200" height="260" fill="#fff"/><circle cx="154" cy="178" r="20" fill="#000"/></mask></defs>
+      ${starsSVG(17, 30, 250)}
+      <g transform="translate(78 92) rotate(-18)">
+        <path d="M-64 0A64 15 0 0 1 64 0" fill="none" stroke="#e8d3a2" stroke-width="5"/>
+        <circle r="36" fill="url(#${p}g)"/>
+        <path d="M-35 -8h70M-36 6h72" stroke="#b9873f" stroke-opacity=".5" stroke-width="3"/>
+        <path d="M-64 0A64 15 0 0 0 64 0" fill="none" stroke="#e8d3a2" stroke-width="5"/>
+        <path d="M-64 0A64 15 0 0 0 64 0" fill="none" stroke="#8a6424" stroke-width="1" transform="scale(.9)"/>
+      </g>
+      <circle cx="140" cy="186" r="24" fill="#c3cfdf" mask="url(#${p}m)"/>
+      <path d="M138 80C168 96 150 120 128 128C112 134 112 150 126 150C140 150 136 134 124 140C108 148 116 168 120 176" fill="none" stroke="#c0322a" stroke-width="2.6" stroke-linecap="round"/>
+      <circle cx="139" cy="80" r="3" fill="#c0322a"/><circle cx="120" cy="177" r="3" fill="#c0322a"/></svg>`;
+  },
+
+  tonyo(p) {
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet"><defs>
+      <radialGradient id="${p}h" cx="50%" cy="50%" r="50%"><stop offset="0" stop-color="#fff3c4"/><stop offset=".6" stop-color="#f1c45a"/><stop offset="1" stop-color="#c58a2e"/></radialGradient>
+      <mask id="${p}m"><rect width="200" height="260" fill="#fff"/><circle cx="40" cy="52" r="14" fill="#000"/></mask></defs>
+      ${starsSVG(53, 30, 250)}
+      <g opacity=".9">${Array.from({ length: 28 }, (_, i) => { const a = i * Math.PI / 14, r2 = i % 2 ? 70 : 80; return `<line x1="${100 + 60 * Math.cos(a)}" y1="${96 + 60 * Math.sin(a)}" x2="${100 + r2 * Math.cos(a)}" y2="${96 + r2 * Math.sin(a)}" stroke="#f6dc94" stroke-width="1.6" stroke-linecap="round"/>`; }).join('')}</g>
+      <circle cx="100" cy="96" r="58" fill="url(#${p}h)" opacity=".9"/>
+      <circle cx="32" cy="58" r="18" fill="#c3cfdf" mask="url(#${p}m)"/>
+      <path d="M26 264C30 214 58 190 100 188C142 190 170 214 174 264z" fill="#1f1c24"/>
+      <path d="M86 182c4 10 24 10 28 0" fill="none" stroke="#3a3540" stroke-width="3"/>
+      <rect x="88" y="146" width="24" height="40" rx="8" fill="#d39a73"/>
+      <ellipse cx="69" cy="116" rx="5.5" ry="9" fill="#d9a37c"/><ellipse cx="131" cy="116" rx="5.5" ry="9" fill="#d9a37c"/>
+      <ellipse cx="100" cy="114" rx="31" ry="38" fill="#e2ad86"/>
+      <path d="M66 112C58 80 72 56 100 56C130 54 146 76 136 112C134 100 130 94 124 90C121 99 112 101 108 93C103 103 92 104 88 95C84 103 76 102 74 94C70 100 68 105 66 112z" fill="#1d1715"/>
+      <path d="M80 66c8-6 18-8 26-6M98 58c10 0 20 4 26 12M72 80c2-8 8-14 14-16" fill="none" stroke="#3b302b" stroke-width="2" stroke-linecap="round"/>
+      <path d="M82 106q7-3 13 0M105 106q7-3 13 0" fill="none" stroke="#2a201c" stroke-width="2.6" stroke-linecap="round"/>
+      <path d="M84 117q5-4 10 0M106 117q5-4 10 0" fill="none" stroke="#2a201c" stroke-width="2.4" stroke-linecap="round"/>
+      <path d="M100 118q-4 10-1 14q3 1 6-1" fill="none" stroke="#b9805c" stroke-width="1.8" stroke-linecap="round"/>
+      <path d="M90 138q10 7 20 0" fill="none" stroke="#8a4a3a" stroke-width="2.2" stroke-linecap="round"/>
+      <circle cx="82" cy="128" r="6" fill="#e79aa6" opacity=".35"/><circle cx="118" cy="128" r="6" fill="#e79aa6" opacity=".35"/>
+      <text x="100" y="232" text-anchor="middle" font-size="26" fill="#caa04c" font-family="Noto Sans Symbols, Segoe UI Symbol, sans-serif">&#9807;&#65038;</text></svg>`;
+  },
+
+  lovers(p) {
+    let rays = '';
+    for (let i = 0; i < 20; i++) { const a = i * Math.PI / 10; rays += `<line x1="${100 + 40 * Math.cos(a)}" y1="${70 + 40 * Math.sin(a)}" x2="${100 + (i % 2 ? 52 : 62) * Math.cos(a)}" y2="${70 + (i % 2 ? 52 : 62) * Math.sin(a)}" stroke="#f6dc94" stroke-width="2" stroke-linecap="round"/>`; }
+    return `<svg viewBox="0 0 200 260" preserveAspectRatio="xMidYMid meet"><defs>
+      <radialGradient id="${p}h" cx="40%" cy="35%"><stop offset="0" stop-color="#fff3c4"/><stop offset="1" stop-color="#e2a83f"/></radialGradient></defs>
+      ${starsSVG(29, 24, 250)}${rays}
+      <path d="M100 96C88 84 66 76 66 58C66 46 76 38 86 38C93 38 98 42 100 48C102 42 107 38 114 38C124 38 134 46 134 58C134 76 112 84 100 96z" fill="url(#${p}h)"/>
+      <path d="M0 236Q100 222 200 236V260H0z" fill="#2b2347"/>
+      <circle cx="66" cy="148" r="11" fill="#e9c9a6"/>
+      <path d="M66 160C52 168 48 200 46 236H88C86 200 82 168 66 160z" fill="#8e2a3a"/>
+      <circle cx="134" cy="148" r="11" fill="#e9c9a6"/><path d="M123 146a11 11 0 0 1 22 0c0-12-22-12-22 0z" fill="#3a2a22"/>
+      <path d="M134 160C120 168 116 200 112 236H156C154 200 150 168 134 160z" fill="#3b5f8f"/>
+      <path d="M76 172Q90 186 100 188" fill="none" stroke="#8e2a3a" stroke-width="6" stroke-linecap="round"/>
+      <path d="M124 172Q110 186 100 188" fill="none" stroke="#3b5f8f" stroke-width="6" stroke-linecap="round"/>
+      <circle cx="100" cy="188" r="4.5" fill="#e9c9a6"/>
+      <text x="44" y="132" font-family="IM Fell English, Georgia, serif" font-size="18" fill="#f6dc94">11</text>
+      <text x="148" y="132" font-family="IM Fell English, Georgia, serif" font-size="18" fill="#f6dc94">4</text></svg>`;
+  }
+};
+
+function cardFace(c) {
+  const f = el('div', 'cardface');
+  const num = el('div', 'num' + (c.roman ? ' roman' : ''), c.num);
+  const pic = el('div', 'pic'); pic.innerHTML = ART[c.art]('a' + (uid++));
+  pic.setAttribute('aria-hidden', 'true');
+  f.append(num, pic, el('div', 'name', c.name));
+  return f;
+}
+
+/* ---------- Fill the page from CONFIG ---------- */
+const L = CONFIG.letter;
+document.title = CONFIG.pageTitle;
+$('introLead').textContent = CONFIG.intro.lead;
+$('introSub').textContent = CONFIG.intro.sub;
+['deckB1', 'deckB2', 'deckB3', 'deckTop'].forEach((id) => { $(id).innerHTML = ART.back('b' + (uid++)); });
+$('deckFace').append(cardFace(CONFIG.intro.card));
+
+$('heroEyebrow').textContent = CONFIG.hero.eyebrow;
+const g = $('greeting');
+g.append(el('span', 'foil', CONFIG.hero.greeting + ' '), el('span', 'emo', CONFIG.hero.greetingEmoji));
+$('scrollCue').textContent = CONFIG.hero.cue;
+
+L.opening.forEach((t) => $('openingText').append(el('p', null, t)));
+$('chartEyebrow').textContent = L.chart.eyebrow;
+$('chartTitle').textContent = L.chart.title;
+L.chart.text.forEach((t) => $('crashText').append(el('p', null, t)));
+$('wheelNote').textContent = L.chart.note;
+const P = CONFIG.portrait;
+$('portraitCard').append(cardFace(P.card));
+$('portraitName').textContent = P.name;
+$('portraitFacts').textContent = P.facts;
+P.text.forEach((t) => $('portraitText').append(el('p', null, t)));
+
+const RD = CONFIG.reading;
+$('readEyebrow').textContent = RD.eyebrow;
+$('readTitle').textContent = RD.title;
+RD.pages.forEach((pg, i) => {
+  const d = el('article', 'page rv');
+  d.style.setProperty('--tilt', [-.8, .6, -.4, .9, -.6, .5, -.3][i % 7] + 'deg');
+  const h = el('h3', null, pg.title);
+  if (pg.glyph) h.prepend(el('span', null, pg.glyph));
+  d.append(h);
+  pg.text.forEach((t) => d.append(el('p', null, t)));
+  if (pg.sign) d.append(el('p', 'sign', pg.sign));
+  $('readPages').append(d);
+});
+
+function buildSpread(target, cards, tiltSeed) {
+  cards.forEach((c, i) => {
+    const b = el('button', 'tcard rv');
+    b.type = 'button';
+    b.style.setProperty('--tilt', (((i + tiltSeed) % 3) - 1) * 2.2 + 'deg');
+    b.setAttribute('aria-label', c.name + '. Tap to read the card.');
+    const inner = el('div', 'inner');
+    const front = el('div', 'side'); front.append(cardFace(c));
+    const back = el('div', 'side reading');
+    const head = el('div', 'rhead'); head.append(el('span', null, c.head), el('span', null, c.glyph));
+    back.append(head, el('p', null, c.text), el('div', 'stamp', L.ship.stamp));
+    inner.append(front, back);
+    b.append(inner, el('span', 'hint', L.ship.hint));
+    b.addEventListener('click', () => {
+      b.classList.toggle('flipped');
+      b.setAttribute('aria-label', c.name + (b.classList.contains('flipped') ? '. Tap to turn back.' : '. Tap to read the card.'));
+    });
+    target.append(b);
+  });
+}
+$('findEyebrow').textContent = L.findings.eyebrow;
+$('findTitle').textContent = L.findings.title;
+buildSpread($('findSpread'), L.findings.cards, 0);
+$('shipEyebrow').textContent = L.ship.eyebrow;
+$('shipTitle').textContent = L.ship.title;
+buildSpread($('shipSpread'), L.ship.cards, 1);
+
+$('solarEyebrow').textContent = L.solar.eyebrow;
+$('natalLabel').textContent = L.solar.natal;
+$('lapLabel').textContent = L.solar.lapLabel;
+$('solarText').textContent = L.solar.text;
+
+L.realTalk.forEach((t) => $('letterText').append(el('p', null, t)));
+$('letterText').append(el('p', 'last', L.closing), el('p', 'sign', L.sign));
+
+$('galEyebrow').textContent = CONFIG.gallery.eyebrow;
+$('galTitle').textContent = CONFIG.gallery.title;
+$('songEyebrow').textContent = CONFIG.song.eyebrow;
+const songLink = $('songLink');
+songLink.href = 'https://open.spotify.com/track/' + CONFIG.SPOTIFY_TRACK_ID;
+songLink.textContent = CONFIG.song.linkText;
+
+const M = CONFIG.message;
+$('msgEyebrow').textContent = M.eyebrow;
+$('msgTitle').textContent = M.title;
+$('msgLabel').textContent = M.label;
+M.prompts.forEach((t) => $('prompts').append(el('span', 'prompt', t)));
+$('wishText').placeholder = M.placeholder;
+$('sendBtn').textContent = M.sendLabel;
+$('copyBtn').textContent = M.copyLabel;
+$('msgNote').textContent = M.note;
+$('footer').textContent = CONFIG.footer;
+
+/* ---------- Scorpius, drawn star by star ---------- */
+(function constellation() {
+  const pts = [[30, 70], [58, 52], [70, 84], [62, 118], [128, 96], [176, 104], [214, 108], [250, 118], [286, 136], [318, 152], [352, 164], [392, 168], [430, 158], [458, 136], [470, 110], [452, 92], [440, 104]];
+  const links = [[0, 2], [1, 2], [2, 3], [2, 4], [4, 5], [5, 6], [6, 7], [7, 8], [8, 9], [9, 10], [10, 11], [11, 12], [12, 13], [13, 14], [14, 15], [14, 16]];
+  const s = $('constel');
+  links.forEach(([a, b], i) => {
+    const [x1, y1] = pts[a], [x2, y2] = pts[b];
+    const len = Math.hypot(x2 - x1, y2 - y1);
+    const ln = sv('line', { x1, y1, x2, y2, 'stroke-dasharray': len, 'stroke-dashoffset': reduceMotion ? 0 : len });
+    if (!reduceMotion) ln.style.transition = `stroke-dashoffset .5s ease ${0.9 + i * 0.12}s`;
+    s.append(ln);
+  });
+  pts.forEach(([x, y], i) => s.append(sv('circle', { cx: x, cy: y, r: i === 6 ? 4.5 : 2.6 })));
+  const halo = sv('circle', { cx: 214, cy: 108, r: 10, fill: '#e79aa655' });
+  s.append(halo);
+  const t = sv('text', { x: 214, y: 192, 'text-anchor': 'middle' }); t.textContent = CONFIG.hero.constellation;
+  s.append(t);
+})();
+function drawConstellation() { document.querySelectorAll('#constel line').forEach((l) => l.setAttribute('stroke-dashoffset', 0)); }
+
+/* ---------- Chart wheel ---------- */
+const SIGNS = ['♈', '♉', '♊', '♋', '♌', '♍', '♎', '♏', '♐', '♑', '♒', '♓'];
+const polar = (deg, r) => { const a = (180 + deg) * Math.PI / 180; return [r * Math.cos(a), -r * Math.sin(a)]; };
+const wheelRot = sv('g', {});
+(function buildWheel() {
+  const w = $('wheel');
+  w.append(sv('circle', { r: 166, fill: '#ffffff06' }));
+  [158, 120, 64].forEach((r, i) => w.append(sv('circle', { class: 'ring', r, 'stroke-width': i === 0 ? 2 : 1 })));
+  w.append(wheelRot);
+  for (let i = 0; i < 12; i++) {
+    const [x1, y1] = polar(i * 30, 120), [x2, y2] = polar(i * 30, 158);
+    wheelRot.append(sv('line', { class: 'spoke', x1, y1, x2, y2 }));
+    const [ix, iy] = polar(i * 30, 64), [ox, oy] = polar(i * 30, 118);
+    wheelRot.append(sv('line', { class: 'spoke', x1: ix, y1: iy, x2: ox, y2: oy, 'stroke-opacity': .4 }));
+    const [gx, gy] = polar(i * 30 + 15, 139);
+    const t = sv('text', { class: 'sign' + (i === 3 || i === 7 ? ' hot' : ''), x: gx, y: gy });
+    t.textContent = SIGNS[i] + '︎';
+    wheelRot.append(t);
+  }
+  const sun = polar(7 * 30 + 12, 94), moon = polar(3 * 30 + 18, 94);
+  wheelRot.append(sv('line', { class: 'trine', x1: sun[0], y1: sun[1], x2: moon[0], y2: moon[1] }));
+  [[sun, '☉', '#f1c45a'], [moon, '☽', '#c3cfdf']].forEach(([[x, y], gl, c]) => {
+    wheelRot.append(sv('circle', { class: 'pdot', cx: x, cy: y, r: 15, fill: c }));
+    const t = sv('text', { class: 'planet', x, y }); t.textContent = gl + '︎';
+    wheelRot.append(t);
+  });
+  const cap = sv('text', { class: 'cap', x: 0, y: 5 }); cap.textContent = '25 · xi';
+  w.append(cap);
+})();
+
+/* ---------- Gallery ---------- */
+const photos = CONFIG.gallery.photos;
+function roman(n) { const m = [[10, 'X'], [9, 'IX'], [5, 'V'], [4, 'IV'], [1, 'I']]; let o = ''; for (const [v, r] of m) while (n >= v) { o += r; n -= v; } return o; }
+let gi = 0;
+photos.forEach((ph, i) => {
+  const slide = el('div', 'slide');
+  const asCard = i % 2 === 1;
+  const pol = el('figure', asCard ? 'tframe' : 'polaroid');
+  pol.style.margin = '0';
+  pol.style.setProperty('--tilt', [-2, 1.6, -1, 2.2, -1.8, 1][i % 6] + 'deg');
+  if (asCard) pol.append(el('div', 'num', roman(i + 1)));
+  const box = el('div', 'ph' + (ph.src ? ' has' : ''));
+  if (ph.src) {
+    const img = el('img'); img.src = ph.src; img.alt = ph.caption || 'photo ' + (i + 1);
+    img.loading = i < 2 ? 'eager' : 'lazy'; img.decoding = 'async';
+    box.append(img);
+  } else {
+    const e = el('div', 'empty');
+    e.innerHTML = `<svg viewBox="0 0 74 74" aria-hidden="true"><rect x="6" y="18" width="62" height="44" rx="6" fill="none" stroke="#caa04c" stroke-width="2"/><rect x="24" y="11" width="22" height="9" rx="2" fill="none" stroke="#caa04c" stroke-width="2"/><circle cx="37" cy="40" r="13" fill="none" stroke="#caa04c" stroke-width="2"/><path d="M37 33l2 5 5 2-5 2-2 5-2-5-5-2 5-2z" fill="#f6dc94"/></svg>`;
+    e.append(document.createTextNode(CONFIG.gallery.placeholder));
+    box.append(e);
+  }
+  pol.append(box);
+  if (ph.caption || !asCard) pol.append(el('figcaption', 'cap', ph.caption || ''));
+  slide.append(pol);
+  $('galTrack').append(slide);
+});
+function showSlide(n) {
+  gi = (n + photos.length) % photos.length;
+  $('galTrack').style.transform = `translateX(${-gi * 100}%)`;
+  $('galCount').textContent = (gi + 1) + ' / ' + photos.length;
+  [gi, gi + 1, gi - 1].forEach((k) => { const im = $('galTrack').children[(k + photos.length) % photos.length].querySelector('img'); if (im) im.loading = 'eager'; });
+}
+$('galPrev').addEventListener('click', () => showSlide(gi - 1));
+$('galNext').addEventListener('click', () => showSlide(gi + 1));
+(function swipe() {
+  const v = $('galView'); let x0 = null;
+  v.addEventListener('pointerdown', (e) => { x0 = e.clientX; });
+  v.addEventListener('pointerup', (e) => {
+    if (x0 == null) return;
+    const dx = e.clientX - x0; x0 = null;
+    if (Math.abs(dx) > 40) showSlide(gi + (dx < 0 ? 1 : -1));
+  });
+  v.addEventListener('pointercancel', () => { x0 = null; });
+})();
+showSlide(0);
+
+/* ---------- Sky: star fields as box-shadows on three layers ---------- */
+function starField(n, size, color) {
+  const out = [];
+  const W = Math.max(window.innerWidth, 400), H = Math.max(window.innerHeight, 700) * 2.4;
+  for (let i = 0; i < n; i++) out.push(`${Math.round(Math.random() * W)}px ${Math.round(Math.random() * H)}px 0 ${size}px ${color}`);
+  return out.join(',');
+}
+const sky = [['sky1', 140, 0, '#efe6d3aa', .08], ['sky2', 60, .4, '#f6dc94cc', .2], ['sky3', 24, .9, '#ffffff', .38]];
+sky.forEach(([id, n, s, c]) => { $(id).style.boxShadow = starField(n, s, c); });
+
+/* ---------- Intro ---------- */
+const intro = $('intro');
+function openIntro() {
+  if (intro.classList.contains('opening')) return;
+  intro.classList.add('opening');
+  startSong();
+  setTimeout(() => {
+    intro.classList.add('gone');
+    $('musicBtn').hidden = false;
+    drawConstellation();
+    revealVisible();
+  }, reduceMotion ? 300 : 2300);
+}
+intro.addEventListener('click', openIntro);
+intro.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openIntro(); } });
+intro.focus();
+
+/* ---------- Spotify: plays inside the page, started by the intro tap ---------- */
+let songCtl = null;
+let songWanted = false;
+let songPlaying = false;
+window.onSpotifyIframeApiReady = (IFrameAPI) => {
+  IFrameAPI.createController($('songEmbed'), {
+    uri: 'spotify:track:' + CONFIG.SPOTIFY_TRACK_ID, width: '100%', height: '152'
+  }, (ctl) => {
+    songCtl = ctl;
+    ctl.addListener('playback_update', (e) => {
+      songPlaying = !!(e && e.data && !e.data.isPaused);
+      $('musicBtn').classList.toggle('playing', songPlaying);
+    });
+    if (songWanted) ctl.play();
+  });
+};
+function startSong() {
+  songWanted = true;
+  if (songCtl) songCtl.play();
+}
+function toggleSong() {
+  if (!songCtl) { songLink.click(); return; }
+  const wasPlaying = songPlaying;
+  songCtl.togglePlay();
+  // Some phones only let the player's own button start sound: if nothing
+  // started, bring the player into view and point at it.
+  if (!wasPlaying) setTimeout(() => {
+    if (songPlaying) return;
+    const card = document.querySelector('.song-card');
+    card.scrollIntoView({ behavior: reduceMotion ? 'auto' : 'smooth', block: 'center' });
+    card.classList.remove('nudge'); void card.offsetWidth; card.classList.add('nudge');
+  }, 1600);
+}
+$('musicBtn').addEventListener('click', (e) => { e.stopPropagation(); toggleSong(); });
+
+/* ---------- Reveal on scroll ---------- */
+const rvEls = Array.from(document.querySelectorAll('.rv'));
+function revealVisible() {
+  rvEls.forEach((n) => { const r = n.getBoundingClientRect(); if (r.top < innerHeight * .92) n.classList.add('in'); });
+}
+if ('IntersectionObserver' in window && !reduceMotion) {
+  const io = new IntersectionObserver((es) => es.forEach((e) => { if (e.isIntersecting) { e.target.classList.add('in'); io.unobserve(e.target); } }), { rootMargin: '0px 0px -8% 0px' });
+  rvEls.forEach((n, i) => { n.style.transitionDelay = (n.classList.contains('tcard') ? (i % 4) * 0.12 : 0) + 's'; io.observe(n); });
+} else {
+  rvEls.forEach((n) => n.classList.add('in'));
+}
+
+/* ---------- Scroll-linked motion ---------- */
+const clamp = (v, a, b) => Math.min(b, Math.max(a, v));
+const orbitSun = $('orbitSun'), trail = $('orbitTrail'), lap = $('lapCount');
+const trailLen = 2 * Math.PI * 140;
+trail.style.strokeDasharray = trailLen;
+let fired = false;
+function sectionProgress(node) {
+  const r = node.getBoundingClientRect();
+  const span = r.height - innerHeight;
+  return span > 0 ? clamp(-r.top / span, 0, 1) : (r.top < innerHeight * .5 ? 1 : 0);
+}
+function onScroll() {
+  const doc = document.documentElement;
+  const p = clamp(scrollY / Math.max(1, doc.scrollHeight - innerHeight), 0, 1);
+  $('progBar').style.width = (p * 100) + '%';
+  $('progMoon').style.left = (p * 100) + '%';
+
+  if (!reduceMotion) {
+    sky.forEach(([id, , , , sp]) => { $(id).style.transform = `translate3d(0, ${-scrollY * sp}px, 0)`; });
+    const cr = $('chart').getBoundingClientRect();
+    const cp = clamp(1 - (cr.top + cr.height / 2) / (innerHeight + cr.height / 2), 0, 1);
+    wheelRot.setAttribute('transform', `rotate(${(cp - .5) * 70})`);
+  }
+
+  const sp = reduceMotion ? 1 : sectionProgress($('solar'));
+  const f = clamp(sp / .85, 0, 1);
+  const a = -Math.PI / 2 + f * 2 * Math.PI;
+  orbitSun.setAttribute('transform', `translate(${140 * Math.cos(a)} ${140 * Math.sin(a)})`);
+  trail.style.strokeDashoffset = trailLen * (1 - f);
+  lap.textContent = f >= 1 ? '25' : '24';
+  if (f >= 1 && !fired) { fired = true; fireworks(); }
+  if (f < .6) fired = false;
+}
+let ticking = false;
+addEventListener('scroll', () => { if (!ticking) { ticking = true; requestAnimationFrame(() => { ticking = false; onScroll(); }); } }, { passive: true });
+addEventListener('resize', onScroll);
+onScroll();
+
+/* ---------- Trail, scroll sparkles, tap bursts (off for reduced motion) ---------- */
+const glyphs = ['✦', '✧', '⋆', '☽', '✶', '♏'];
+const tints = ['#f6dc94', '#efe6d3', '#e79aa6', '#c3cfdf'];
+const introShowing = () => !intro.classList.contains('gone');
+function trailAt(x, y) {
+  const s = el('span', 'trail', glyphs[Math.floor(Math.random() * 3)]);
+  s.style.left = x + 'px'; s.style.top = y + 'px';
+  s.style.color = tints[Math.floor(Math.random() * tints.length)];
+  s.style.setProperty('--dx', (Math.random() * 40 - 20).toFixed(0) + 'px');
+  s.style.setProperty('--dy', (Math.random() * 40 + 10).toFixed(0) + 'px');
+  document.body.appendChild(s);
+  s.addEventListener('animationend', () => s.remove());
+}
+function burstAt(x, y, n, spread) {
+  for (let i = 0; i < n; i++) {
+    const s = el('span', 'burst', glyphs[i % glyphs.length] + '︎');
+    s.style.left = x + 'px'; s.style.top = y + 'px';
+    s.style.color = tints[i % tints.length];
+    const ang = Math.random() * Math.PI * 2, d = spread * (.4 + Math.random() * .6);
+    s.style.setProperty('--x', (Math.cos(ang) * d).toFixed(0) + 'px');
+    s.style.setProperty('--y', (Math.sin(ang) * d - 30).toFixed(0) + 'px');
+    document.body.appendChild(s);
+    s.addEventListener('animationend', () => s.remove());
+  }
+}
+function fireworks() {
+  if (reduceMotion) return;
+  const o = $('orbit').getBoundingClientRect();
+  [[.5, .5, 0], [.15, .2, 260], [.85, .25, 480], [.3, .85, 700], [.75, .8, 900]].forEach(([fx, fy, t]) =>
+    setTimeout(() => burstAt(o.left + o.width * fx, o.top + o.height * fy, 16, 140), t));
+}
+if (!reduceMotion) {
+  let lastTrail = 0;
+  addEventListener('pointermove', (e) => {
+    if (introShowing()) return;
+    const now = performance.now();
+    if (now - lastTrail < 45) return;
+    lastTrail = now;
+    trailAt(e.clientX, e.clientY);
+  }, { passive: true });
+  let lastScroll = 0;
+  addEventListener('scroll', () => {
+    if (introShowing()) return;
+    const now = performance.now();
+    if (now - lastScroll < 160) return;
+    lastScroll = now;
+    for (let i = 0; i < 2; i++) trailAt(Math.random() * innerWidth, Math.random() * innerHeight * .9);
+  }, { passive: true });
+  document.addEventListener('click', (e) => {
+    if (e.target.closest('#intro') || e.target.closest('textarea') || e.target.closest('#musicBtn')) return;
+    burstAt(e.clientX, e.clientY, 9, 90);
+  });
+}
+
+/* ---------- Message box: sends through the Apps Script, or copies ---------- */
+const wishText = $('wishText');
+const msgStatus = $('msgStatus');
+const say = (k) => { msgStatus.textContent = M.status[k]; };
+// Send: open a Gmail draft addressed to Yezsa with his message in it.
+// iPhone: the Gmail app's own link, falling back to Gmail on the web if the app
+// is not installed. Android and computers: Gmail's compose page (Android hands
+// it to the Gmail app).
+$('sendBtn').addEventListener('click', () => {
+  const text = wishText.value.trim();
+  if (!text) return say('empty');
+  say('sending');
+  const to = encodeURIComponent(CONFIG.EMAIL_TO);
+  const su = encodeURIComponent(CONFIG.EMAIL_SUBJECT);
+  const body = encodeURIComponent(text);
+  const web = `https://mail.google.com/mail/?view=cm&fs=1&to=${to}&su=${su}&body=${body}`;
+  const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
+  try {
+    if (isIOS) {
+      const started = Date.now();
+      setTimeout(() => { if (!document.hidden && Date.now() - started < 2500) location.href = web; }, 1200);
+      location.href = `googlegmail:///co?to=${to}&subject=${su}&body=${body}`;
+      say('sent');
+    } else {
+      // no 'noopener' feature here: with it, window.open always returns null
+      const w = window.open(web, '_blank');
+      if (w) w.opener = null; else location.href = web;
+      say('sent');
+    }
+  } catch (err) {
+    say('failed');
+  }
+});
+$('copyBtn').addEventListener('click', async () => {
+  const text = wishText.value.trim();
+  if (!text) return say('copyEmpty');
+  try {
+    await navigator.clipboard.writeText(text);
+    say('copied');
+  } catch (err) {
+    wishText.select();
+    say('copyFailed');
+  }
+});
+</script>
+<script src="https://open.spotify.com/embed/iframe-api/v1" async></script>
+</body>
+</html>
