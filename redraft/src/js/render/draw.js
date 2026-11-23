@@ -2,6 +2,7 @@
 import { getStroke } from '../../../node_modules/perfect-freehand/dist/esm/index.mjs';
 import { drawGrid } from './paper.js';
 import { bboxOfPoints } from '../core/geometry.js';
+import { drawHand, measureHand, handReady } from './hand.js';
 
 export const BRUSHES = {
   pen:         { thinning: 0.55, smoothing: 0.62, streamline: 0.32, taper: 2.5 },
@@ -85,7 +86,7 @@ function grainPattern(ctx, color) {
 export function drawStroke(ctx, obj, env, path = strokePath(obj)) {
   const b = BRUSHES[obj.tool] || BRUSHES.pen;
   ctx.save();
-  ctx.globalAlpha = Math.max(0, Math.min(1, obj.opacity * (b.alphaMul || 1)));
+  ctx.globalAlpha = Math.max(0, Math.min(1, obj.alpha ?? obj.opacity * (b.alphaMul || 1)));
   if (obj.tool === 'eraser') {
     ctx.globalCompositeOperation = 'destination-out';
     ctx.fillStyle = '#000';
@@ -142,9 +143,18 @@ export function textLayout(o, text = o.text) {
   return res;
 }
 
-export const measureText = (o) => { const L = textLayout(o); return { w: L.w, h: L.h }; };
+export const measureText = (o) => {
+  if (o.hand && handReady(o)) return measureHand(o);
+  const L = textLayout(o);
+  return { x0: 0, y0: o.hand ? -L.baseline : 0, w: L.w, h: L.h };
+};
 
-export function drawText(ctx, o, text = o.text) {
+export function drawText(ctx, o, text = o.text, opts) {
+  if (o.hand) {
+    if (handReady(o)) return drawHand(ctx, o, { ...opts, text }) || null;
+    // Fonts still loading: draw plainly at the same baseline.
+    return drawText(ctx, { ...o, hand: false, y: o.y - textLayout(o).baseline }, text);
+  }
   const L = textLayout(o, text);
   ctx.save();
   ctx.translate(o.x, o.y);
@@ -171,7 +181,8 @@ export function renderLayer(ctx, layer, env, exclude) {
   }
 }
 
-export function drawBackground(ctx, page, bitmap) {
+/** bitmap = scan image for image pages; refBitmap = original scan shown for comparison on rebuilt pages. */
+export function drawBackground(ctx, page, bitmap, refBitmap) {
   ctx.save();
   ctx.fillStyle = '#ffffff';
   ctx.fillRect(0, 0, page.w, page.h);
@@ -182,7 +193,13 @@ export function drawBackground(ctx, page, bitmap) {
       ctx.drawImage(bitmap, 0, 0, page.w, page.h);
     } else if (page.bg.kind === 'grid') {
       drawGrid(ctx, page.grid, { x: 0, y: 0, w: page.w, h: page.h });
+      const d = page.bg.divider;
+      if (d) { ctx.fillStyle = d.color; ctx.fillRect(d.x - d.w / 2, 0, d.w, page.h); }
     }
+  }
+  if (page.ref && page.refVisible && refBitmap) {
+    ctx.globalAlpha = page.refOpacity ?? 0.5;
+    ctx.drawImage(refBitmap, 0, 0, page.w, page.h);
   }
   ctx.restore();
 }
@@ -191,13 +208,13 @@ export function drawBackground(ctx, page, bitmap) {
  * Render a whole page (background + visible layers) into a new canvas at `scale`.
  * Used for export, thumbnails and replay.
  */
-export function renderPageCanvas(page, bitmap, scale, { exclude, maxSide = 12000 } = {}) {
+export function renderPageCanvas(page, bitmap, scale, { exclude, maxSide = 12000, refBitmap } = {}) {
   const k = Math.min(scale, maxSide / Math.max(page.w, page.h));
   const W = Math.max(1, Math.round(page.w * k)), H = Math.max(1, Math.round(page.h * k));
   const out = new OffscreenCanvas(W, H);
   const ctx = out.getContext('2d');
   ctx.setTransform(k, 0, 0, k, 0, 0);
-  drawBackground(ctx, page, bitmap);
+  drawBackground(ctx, page, bitmap, refBitmap);
   const tmp = new OffscreenCanvas(W, H);
   const t = tmp.getContext('2d');
   const env = { grid: page.grid };
@@ -210,6 +227,7 @@ export function renderPageCanvas(page, bitmap, scale, { exclude, maxSide = 12000
     ctx.save();
     ctx.setTransform(1, 0, 0, 1, 0, 0);
     ctx.globalAlpha = layer.opacity;
+    ctx.globalCompositeOperation = layer.blend || 'source-over';
     ctx.drawImage(tmp, 0, 0);
     ctx.restore();
   }

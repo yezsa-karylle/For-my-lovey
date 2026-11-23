@@ -11,6 +11,7 @@ import { History } from './core/history.js';
 import {
   drawObject, drawStroke, buildStrokePath, renderLayer, drawBackground, drawText, measureText, renderPageCanvas, textLayout, LINE_HEIGHT,
 } from './render/draw.js';
+import { isHandFamily, handLineHeight } from './render/hand.js';
 
 export const PAINT_TOOLS = ['pen', 'pencil', 'marker', 'highlighter'];
 export const TOOL_NAMES = {
@@ -23,13 +24,13 @@ export function defaultSettings() {
   return {
     stabilizer: 55,
     tools: {
-      pen: { size: 4, opacity: 1, color: '#1b1b1f' },
+      pen: { size: 2.6, opacity: 1, color: '#212126' },
       pencil: { size: 3.5, opacity: 0.9, color: '#2b2b2e' },
       marker: { size: 10, opacity: 1, color: '#1f4fd1' },
       highlighter: { size: 28, opacity: 1, color: '#ffd43b' },
       eraser: { size: 26, mode: 'brush', allLayers: false },
       cover: { size: 46, mode: 'brush' },
-      text: { font: 'Caveat', size: 40, color: '#1b1b1f', weight: 400 },
+      text: { font: 'Gaegu', size: 36, color: '#212126', weight: 300, hand: true, snap: true },
       lasso: { allLayers: false },
     },
   };
@@ -182,7 +183,16 @@ export class Editor {
   // ------------------------------------------------------------ bitmaps
   async ensureBitmap(page) {
     if (!page || page.bg.kind !== 'image') return null;
-    const id = page.bg.asset;
+    return this.ensureAssetBitmap(page.bg.asset);
+  }
+
+  /** The original scan of a page (its background, or the reference kept after rebuilding). */
+  async scanBitmap(page) {
+    const id = page.bg.kind === 'image' ? page.bg.asset : page.ref?.asset;
+    return id ? this.ensureAssetBitmap(id) : null;
+  }
+
+  async ensureAssetBitmap(id) {
     if (this.bitmaps.has(id)) {
       const b = this.bitmaps.get(id);
       this.bitmaps.delete(id); this.bitmaps.set(id, b); // LRU touch
@@ -194,7 +204,7 @@ export class Editor {
     this.bitmaps.set(id, bmp);
     while (this.bitmaps.size > 5) {
       const [k, v] = this.bitmaps.entries().next().value;
-      if (k === this.page?.bg.asset) { this.bitmaps.delete(k); this.bitmaps.set(k, v); continue; }
+      if (k === this.page?.bg.asset || k === this.page?.ref?.asset) { this.bitmaps.delete(k); this.bitmaps.set(k, v); continue; }
       v.close?.(); this.bitmaps.delete(k);
     }
     return bmp;
@@ -358,7 +368,12 @@ export class Editor {
     ctx.fillRect(0, 0, page.w, page.h);
     ctx.restore();
     const bmp = page.bg.kind === 'image' ? this.bitmaps.get(page.bg.asset) : null;
-    drawBackground(ctx, page, bmp);
+    let refBmp = null;
+    if (page.ref && page.refVisible) {
+      refBmp = this.bitmaps.get(page.ref.asset);
+      if (!refBmp) this.ensureAssetBitmap(page.ref.asset).then(() => this.requestRender());
+    }
+    drawBackground(ctx, page, bmp, refBmp);
 
     this.ensureCaches();
     const key = this.viewKey();
@@ -382,6 +397,7 @@ export class Editor {
       }
       ctx.save();
       ctx.globalAlpha = layer.opacity;
+      ctx.globalCompositeOperation = layer.blend || 'source-over';
       if (useView) ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.drawImage(src, 0, 0);
       ctx.restore();
@@ -428,6 +444,7 @@ export class Editor {
       this.requestRender();
     }
 
+    if (this.settings.markUnsure !== false) this.drawUnsureMarks(ctx);
     if (this.selection && !(d && d.kind === 'xform')) this.drawSelectionBox(ctx, accent);
 
     if (this.ruler.on) this.drawRuler(ctx, accent);
@@ -467,6 +484,28 @@ export class Editor {
       ctx.restore();
       this.requestRender();
     }
+  }
+
+  /** Orange dotted underline under OCR lines with low confidence (screen only, never exported). */
+  drawUnsureMarks(ctx) {
+    const page = this.page;
+    ctx.save();
+    ctx.strokeStyle = '#ff8a00';
+    ctx.lineWidth = 2;
+    ctx.setLineDash([2, 4]);
+    for (const layer of page.layers) {
+      if (!layer.visible) continue;
+      for (const o of layer.objects) {
+        if (o.type !== 'text' || o.conf === undefined || o.conf >= 65 || this.hidden.has(o.id)) continue;
+        const c = textCorners(o, measureText);
+        const a = this.toScreen(c[3]), b = this.toScreen(c[2]);
+        ctx.beginPath();
+        ctx.moveTo(a[0], a[1] + 3);
+        ctx.lineTo(b[0], b[1] + 3);
+        ctx.stroke();
+      }
+    }
+    ctx.restore();
   }
 
   // ------------------------------------------------------------ selection box
@@ -661,7 +700,7 @@ export class Editor {
     const s = this.settings.tools[t];
     if (!s) return;
     s[key] = value;
-    if (key === 'color' || key === 'font' || key === 'weight') this.applyToSelection({ [key]: value });
+    if (key === 'color' || key === 'font' || key === 'weight' || key === 'hand') this.applyToSelection({ [key]: value });
     if (this.textEditor) this.updateTextDraft({ [key]: value });
     this.emit('settings');
     this.requestRender();
@@ -1199,7 +1238,8 @@ export class Editor {
       if (Object.keys(p).every((k) => p[k] === undefined || obj[k] === p[k])) continue;
       if (!byLayer.has(layer)) byLayer.set(layer, [[], []]);
       byLayer.get(layer)[0].push(obj);
-      byLayer.get(layer)[1].push({ ...obj, ...Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined)) });
+      const next = { ...obj, ...Object.fromEntries(Object.entries(p).filter(([, v]) => v !== undefined)) };
+      byLayer.get(layer)[1].push(obj.type === 'text' ? this.fixTextKind(obj, next) : next);
     }
     if (!byLayer.size) return;
     const keep = this.selection;
@@ -1274,7 +1314,36 @@ export class Editor {
     }
     if (!this.layer.visible) { this.toast('This layer is hidden.'); return; }
     const s = this.settings.tools.text;
-    this.openTextEditor(null, this.layer.id, [p[0], p[1] - s.size * 0.62]);
+    const layer = this.textLayerFor();
+    if (s.hand && isHandFamily(s.font)) {
+      // Hand text is positioned by its baseline; optionally sit it on the nearest grid line.
+      this.openTextEditor(null, layer.id, [p[0], s.snap ? this.snapBaseline(p[1], s.size) : p[1] + s.size * 0.3]);
+    } else this.openTextEditor(null, layer.id, [p[0], p[1] - s.size * 0.62]);
+  }
+
+  /** On rebuilt pages new text goes to the "Text" layer unless you picked another one. */
+  textLayerFor() {
+    const l = this.layer;
+    if (l && l.name !== 'Highlights') return l;
+    return this.page.layers.find((x) => x.name === 'Text' && x.visible) || l;
+  }
+
+  /** Baseline of the grid row nearest to y (letters sit just above the grid line, like the notes). */
+  snapBaseline(y, size = 36) {
+    const g = this.page.grid;
+    const off = this.page.baseOffset ?? g.sy - (7 * g.sy) / 46;
+    const k = Math.round((y + size * 0.3 - g.oy - off) / g.sy);
+    return g.oy + k * g.sy + off;
+  }
+
+  /** Keep a text object's look in place when switching between natural-handwriting and plain fonts. */
+  fixTextKind(before, next) {
+    next.hand = !!next.hand && isHandFamily(next.font);
+    if (next.hand && !next.seed) next.seed = (Math.random() * 2 ** 31) | 0;
+    if (!!before.hand === next.hand) return next;
+    const base = before.hand ? before.y : before.y + textLayout({ ...before, hand: false }).baseline;
+    next.y = next.hand ? base : base - textLayout({ ...next, hand: false }).baseline;
+    return next;
   }
 
   moveTextDrag(p) {
@@ -1299,6 +1368,7 @@ export class Editor {
     const draft = obj ? { ...obj } : {
       id: uid('t'), type: 'text', x: at[0], y: at[1], text: '', font: s.font, size: s.size, weight: s.weight,
       color: s.color, opacity: 1, w: 0, rot: 0,
+      ...(s.hand && isHandFamily(s.font) ? { hand: true, seed: (Math.random() * 2 ** 31) | 0, jitter: 1, sx: 1 } : {}),
     };
     const ta = document.createElement('textarea');
     ta.className = 'text-editor';
@@ -1322,7 +1392,10 @@ export class Editor {
       setTimeout(() => { if (this.textEditor && this.textEditor.ta === ta && document.activeElement !== ta && !document.activeElement?.closest?.('[data-keeps-text]')) this.closeTextEditor(); }, 0);
     });
     this.positionTextEditor();
-    if (obj) { this.settings.tools.text.font = obj.font; this.settings.tools.text.size = Math.round(obj.size); this.settings.tools.text.color = obj.color; this.emit('settings'); }
+    if (obj) {
+      Object.assign(this.settings.tools.text, { font: obj.font, size: Math.round(obj.size), color: obj.color, weight: obj.weight || 400, hand: !!obj.hand });
+      this.emit('settings');
+    }
     const focus = () => { if (this.textEditor?.ta === ta) { ta.focus(); ta.setSelectionRange(ta.value.length, ta.value.length); } };
     focus();
     requestAnimationFrame(focus);
@@ -1335,7 +1408,8 @@ export class Editor {
     const te = this.textEditor;
     if (!te) return;
     if ('size' in props) props.size = Math.max(4, +props.size);
-    Object.assign(te.draft, Object.fromEntries(Object.entries(props).filter(([k]) => ['font', 'size', 'color', 'weight'].includes(k))));
+    const next = { ...te.draft, ...Object.fromEntries(Object.entries(props).filter(([k]) => ['font', 'size', 'color', 'weight', 'hand'].includes(k))) };
+    te.draft = this.fixTextKind(te.draft, next);
     this.positionTextEditor();
   }
 
@@ -1346,18 +1420,19 @@ export class Editor {
     if (!te) return;
     const { ta, draft } = te;
     const z = this.view.zoom;
-    const sp = this.toScreen([draft.x, draft.y]);
-    const L = textLayout({ ...draft, text: draft.text || ' ' });
+    const L = textLayout({ ...draft, hand: false, text: draft.text || ' ' });
+    const sp = this.toScreen([draft.x, draft.hand ? draft.y - L.baseline : draft.y]);
     Object.assign(ta.style, {
       left: sp[0] + 'px', top: sp[1] + 'px',
+      letterSpacing: draft.hand ? '-0.05em' : '', wordSpacing: draft.hand ? '0.12em' : '',
+      lineHeight: draft.hand ? String(handLineHeight(draft) / draft.size) : String(LINE_HEIGHT),
       fontFamily: `"${draft.font}", "Segoe Print", cursive`,
       fontWeight: draft.weight || 400,
       fontSize: draft.size * z + 'px',
-      lineHeight: String(LINE_HEIGHT),
       color: draft.color,
       width: Math.max(L.w + draft.size * 0.8, draft.size * 2) * z + 'px',
       height: L.h * z + 2 + 'px',
-      transform: draft.rot ? `rotate(${draft.rot}rad)` : '',
+      transform: `${draft.rot ? `rotate(${draft.rot}rad)` : ''} ${draft.hand && draft.sx && draft.sx !== 1 ? `scaleX(${draft.sx})` : ''}`.trim(),
     });
   }
 
@@ -1374,6 +1449,7 @@ export class Editor {
     if (!layer) return;
     const text = te.draft.text.replace(/\s+$/, '');
     const draft = { ...te.draft, text };
+    if (te.orig && text !== te.orig.text) delete draft.conf;
     const anim = te.typing.length > 1 ? te.typing : undefined;
     if (te.orig) {
       if (!text.trim()) this.commit(opDelObjs(this.page, layer, [te.orig.id]));

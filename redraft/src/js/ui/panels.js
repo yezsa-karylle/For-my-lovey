@@ -9,7 +9,8 @@ export const TOOLS = [
   ['pen', 'P'], ['pencil', 'N'], ['marker', 'M'], ['highlighter', 'H'],
   ['eraser', 'E'], ['cover', 'W'], ['text', 'T'], ['lasso', 'L'], ['eyedropper', 'I'],
 ];
-export const FONTS = ['Caveat', 'Patrick Hand', 'Kalam', 'Architects Daughter', 'Indie Flower', 'Ink Free', 'Segoe Print', 'Segoe UI', 'Arial'];
+export const FONTS = ['Gaegu', 'Caveat', 'Patrick Hand', 'Kalam', 'Architects Daughter', 'Indie Flower', 'Ink Free', 'Segoe Print', 'Segoe UI', 'Arial'];
+const WEIGHTS = { Gaegu: [[300, 'Light'], [400, 'Regular'], [700, 'Bold']], Kalam: [[300, 'Light'], [400, 'Regular'], [700, 'Bold']] };
 
 function slider({ label, min, max, step = 1, value, fmt = (v) => v, onInput, onChange }) {
   const el = h(`<div class="row"><label>${esc(label)}</label><input type="range" min="${min}" max="${max}" step="${step}" value="${value}"><span class="val">${esc(fmt(value))}</span></div>`);
@@ -123,9 +124,13 @@ export class Panels {
       sel.onchange = () => { set('font', sel.value); ed.refocusText(); };
       card.appendChild(fonts);
       card.appendChild(slider({ label: 'Size', min: 8, max: 220, value: s.size, onInput: (v) => set('size', v), onChange: () => ed.refocusText() }));
-      card.appendChild(seg('Weight', [['400', 'Regular'], ['700', 'Bold']], String(s.weight || 400), (v) => { set('weight', +v); ed.refocusText(); }));
-      card.appendChild(h(`<div class="font-preview" style="font-family:'${esc(s.font)}';font-weight:${s.weight || 400};color:${s.color}">Section A — Plan &amp; Elevation</div>`));
-      card.appendChild(h(`<p class="hint"><b>Click</b> to type. <b>Click</b> existing text to retype it, <b>drag</b> it to move. <b>Esc</b> or click away to finish. Use the Lasso to resize, rotate or recolour text.</p>`));
+      const weights = WEIGHTS[s.font] || [[400, 'Regular'], [700, 'Bold']];
+      card.appendChild(seg('Weight', weights.map(([v, l]) => [String(v), l]), String(s.weight || 400), (v) => { set('weight', +v); ed.refocusText(); }));
+      card.appendChild(check('Natural handwriting (every letter different)', s.hand, (v) => { set('hand', v); this.renderToolCard(); ed.refocusText(); }));
+      card.appendChild(check('Sit on grid lines', s.snap !== false, (v) => { s.snap = v; this.app.saveSettings(); }));
+      card.appendChild(check('Mark lines the OCR was unsure about', ed.settings.markUnsure !== false, (v) => { ed.settings.markUnsure = v; ed.requestRender(); this.app.saveSettings(); }));
+      card.appendChild(h(`<div class="font-preview" style="font-family:'${esc(s.font)}';font-weight:${s.weight || 400};color:${s.color}">Housing = a basic human need</div>`));
+      card.appendChild(h(`<p class="hint"><b>Click</b> to type. <b>Click</b> existing text to retype it, <b>drag</b> it to move. <b>Esc</b> or click away to finish. Natural handwriting gives each letter its own size, tilt and baseline when you finish typing. Use the Lasso to resize, rotate or recolour.</p>`));
     } else if (t === 'lasso') {
       card.appendChild(check('Select on all layers', ed.settings.tools.lasso.allLayers, (v) => { ed.settings.tools.lasso.allLayers = v; }));
       const n = ed.selection ? ed.selection.items.length : 0;
@@ -318,11 +323,26 @@ export class Panels {
       });
       list.appendChild(row);
     });
+    // Original scan kept for comparison on rebuilt pages.
+    if (page.ref) {
+      const ref = h(`<div class="layer locked ${page.refVisible ? '' : 'hidden'}">
+        <button class="eye" data-tip="${page.refVisible ? 'Hide' : 'Show'} the original scan on top, to compare">${icon(page.refVisible ? 'eye' : 'eyeOff')}</button>
+        <div class="name">Original scan (compare)</div>
+        <div class="meta" data-tip="Reference only: never exported">${icon('lock')}</div>
+        <div class="opacity-row"><span style="color:var(--muted);font-size:11px">Opacity</span><input type="range" min="5" max="100" value="${Math.round((page.refOpacity ?? 0.5) * 100)}"></div>
+      </div>`);
+      ref.querySelector('.eye').onclick = () => ed.setPageProps({ refVisible: !page.refVisible });
+      const rr = ref.querySelector('input');
+      rr.oninput = () => { page.refOpacity = rr.value / 100; ed.requestRender(); };
+      rr.onchange = () => ed.requestRender();
+      rr.onkeydown = (e) => e.stopPropagation();
+      list.appendChild(ref);
+    }
     // The locked scan / paper layer.
     const scan = page.bg.kind === 'image';
     const bg = h(`<div class="layer locked ${page.bgVisible === false ? 'hidden' : ''}">
       <button class="eye" data-tip="${page.bgVisible === false ? 'Show' : 'Hide'} ${scan ? 'scan' : 'paper'}|Shift+B">${icon(page.bgVisible === false ? 'eyeOff' : 'eye')}</button>
-      <div class="name">${scan ? 'Original scan' : 'Grid paper'}</div>
+      <div class="name">${scan ? 'Original scan' : page.rebuilt ? 'Grid paper (rebuilt)' : 'Grid paper'}</div>
       <div class="meta" data-tip="Locked: nothing can change it">${icon('lock')}</div>
       <div class="opacity-row"><span style="color:var(--muted);font-size:11px">Opacity</span><input type="range" min="0" max="100" value="${Math.round((page.bgOpacity ?? 1) * 100)}"></div>
     </div>`);

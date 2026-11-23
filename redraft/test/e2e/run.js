@@ -66,6 +66,7 @@ win.on('pageerror', (e) => errors.push(e.message));
 win.on('console', (m) => { if (m.type() === 'error') errors.push(m.text()); });
 await electronApp.evaluate(({ BrowserWindow }) => { const w = BrowserWindow.getAllWindows()[0]; w.setSize(1440, 920); });
 await win.waitForFunction(() => window.__ready === true, null, { timeout: 20000 });
+await win.evaluate(() => { window.__app.noRebuildPrompt = true; });
 
 /** Make the next native open/save dialog return `p`. */
 async function stubDialogs({ open, save } = {}) {
@@ -252,9 +253,14 @@ await step('text: click to type with a handwriting font, then retype it', async 
   const t = await lastObj();
   assert.equal(t.type, 'text');
   assert.equal(t.text, 'Load path -> footing');
-  assert.equal(t.font, 'Caveat');
+  assert.equal(t.font, 'Gaegu');
+  assert.ok(t.hand && t.seed, 'natural handwriting is on by default');
+  // Snapped onto a grid-row baseline.
+  const g = await ed(() => window.__editor.page.grid);
+  const off = ((t.y - g.oy) % g.sy + g.sy) % g.sy;
+  assert.ok(Math.abs(off - (g.sy - 7 * g.sy / 46)) < 0.5 || Math.abs(off - (await ed(() => window.__editor.page.baseOffset ?? -1))) < 0.5, 'baseline on grid row');
   // Click the text again to edit it.
-  const [tx, ty] = await toScreen(t.x + 20, t.y + t.size * 0.6);
+  const [tx, ty] = await toScreen(t.x + 20, t.y - t.size * 0.3);
   await win.mouse.click(tx, ty);
   await win.waitForSelector('.text-editor');
   assert.equal(await win.inputValue('.text-editor'), 'Load path -> footing');
@@ -264,7 +270,7 @@ await step('text: click to type with a handwriting font, then retype it', async 
   assert.equal((await lastObj()).text, 'Load path -> footing (see p.2)');
   // Drag to move it.
   const before = await lastObj();
-  const [sx, sy] = await toScreen(before.x + 30, before.y + before.size * 0.6);
+  const [sx, sy] = await toScreen(before.x + 30, before.y - before.size * 0.3);
   await win.mouse.move(sx, sy);
   await win.mouse.down();
   await win.mouse.move(sx + 40, sy + 30, { steps: 5 });
@@ -328,7 +334,7 @@ await step('lasso: select, scale, copy/paste, delete', async () => {
   await drawPath([[250, 550], [1200, 550], [1200, 900], [250, 900], [250, 552]], { jitter: 0 });
   await win.keyboard.press('3');
   const colors = await ed(() => window.__editor.selectedObjects().map((s) => s.obj.color));
-  assert.ok(colors.every((c) => c === '#d62828'), 'recoloured red: ' + colors);
+  assert.ok(colors.every((c) => c === '#e3453d'), 'recoloured red: ' + colors);
   await win.keyboard.press('Escape');
 });
 
@@ -341,7 +347,7 @@ await step('eyedropper picks a colour from the page', async () => {
   assert.match(c, /^#f[0-9a-f]{5}$/i, 'picked near-white paper: ' + c);
   assert.equal(await ed(() => window.__editor.tool), 'pen', 'returns to previous tool');
   await win.keyboard.press('1');
-  assert.equal(await ed(() => window.__editor.settings.tools.pen.color), '#1b1b1f');
+  assert.equal(await ed(() => window.__editor.settings.tools.pen.color), '#212126');
 });
 
 await step('layers: add, hide, opacity, reorder, delete', async () => {
@@ -449,23 +455,195 @@ await step('export PNG at print quality with DPI metadata', async () => {
   assert.equal(b.readUInt32BE(41), Math.round(300 / 0.0254));
 });
 
-await step('replay export writes a playable MP4 timelapse', async () => {
+await step('replay player and MP4 export (1080p, 30 fps)', async () => {
+  await win.keyboard.press('Control+Shift+r');
+  await win.waitForSelector('.player');
+  const st = await ed(() => ({ d: window.__player.state.engine.duration, n: window.__player.state.engine.segs.length }));
+  assert.ok(st.d > 1000 && st.n > 5, 'timeline built');
+  await ed((t) => { const s = window.__player.state; s.playing = false; s.t = t; s.jump = true; s.dirty = true; }, st.d / 2);
+  await win.waitForTimeout(200);
+  await shot('09-player');
+  await win.keyboard.press('Escape');
+  assert.equal(await win.locator('.player').count(), 0);
   const p = path.join(out, 'replay.mp4');
-  const res = await ed((p) => window.__app.doExportReplay(32, p).then((r) => r && { codec: r.codec, frames: r.frames, w: r.width, h: r.height, s: r.seconds }), p);
+  const res = await ed((p) => window.__app.doExportReplay({ pageIds: [window.__editor.page.id], mode: 'history', speed: 16, format: 'landscape' }, p).then((r) => r && { codec: r.codec, frames: r.frames, w: r.width, h: r.height, s: r.seconds }), p);
   assert.ok(res, 'replay produced');
   console.log('     replay:', JSON.stringify(res));
+  assert.equal(res.w, 1920); assert.equal(res.h, 1080);
   const b = fs.readFileSync(p);
   assert.equal(b.toString('latin1', 4, 8), 'ftyp');
-  // Decode it with the app's own video element.
-  const meta = await ed(async (bytes) => {
+  const meta = await ed(async () => {
+    const blob = await (await fetch('../test/e2e/out/replay.mp4')).blob();
     const v = document.createElement('video');
     v.muted = true;
-    v.src = URL.createObjectURL(new Blob([new Uint8Array(bytes)], { type: 'video/mp4' }));
+    v.src = URL.createObjectURL(blob);
     await new Promise((r, j) => { v.onloadeddata = r; v.onerror = () => j(new Error('video error ' + v.error?.code)); });
     return { d: v.duration, w: v.videoWidth, h: v.videoHeight };
-  }, [...b]);
+  });
   assert.ok(meta.d > 1, 'duration ' + meta.d);
-  assert.equal(meta.w, res.w);
+  assert.equal(meta.w, 1920);
+});
+
+// ---------------------------------------------------------------- notes: rebuild + replay
+const NOTES = [
+  { t: 'TOPIC 3', x: 78, row: 2, size: 44, w: 400, c: 'ink', hl: 'pink' },
+  { t: 'AUGUST 29, 2026', x: 600, row: 2, size: 28, c: 'gray' },
+  { t: 'SITE PLANNING BASICS', x: 78, row: 3, size: 34, c: 'ink', hl: 'yellow' },
+  { t: 'Site analysis studies the land before design.', x: 88, row: 5, size: 36, c: 'ink' },
+  { t: 'It covers slope, soil, drainage and access.', x: 88, row: 6, size: 36, c: 'ink' },
+  { t: 'Key factors :', x: 58, row: 8, size: 36, c: 'ink', ul: true },
+  { t: '1. Topography and slope', x: 88, row: 9, size: 36, c: 'ink' },
+  { t: 'steep slopes need retaining walls', x: 150, row: 10, size: 32, c: 'red' },
+  { t: '2. Orientation and sun path', x: 88, row: 11, size: 36, c: 'ink' },
+  { t: 'living areas face the morning sun', x: 150, row: 12, size: 32, c: 'red' },
+  { t: '3. Utilities and road access', x: 88, row: 13, size: 36, c: 'ink' },
+  { t: 'IN SUMMARY :', x: 70, row: 16, size: 30, c: 'red' },
+  { t: 'Good planning starts with the site itself.', x: 100, row: 17, size: 30, c: 'blue' },
+  { t: 'Housing density depends on the zoning.', x: 940, row: 5, size: 36, c: 'ink' },
+  { t: 'Open space makes a healthy community.', x: 940, row: 6, size: 36, c: 'ink' },
+];
+const NOTE_COLORS = { ink: '#212126', red: '#e3453d', blue: '#296bd9', gray: '#737880' };
+
+await step('rebuild: a notes page becomes editable text, highlights, box and lines', async () => {
+  const b64 = await ed(async ({ NOTES, NOTE_COLORS }) => {
+    const { drawHand, loadHandFonts } = await import('./js/render/hand.js');
+    const { drawStroke, buildStrokePath } = await import('./js/render/draw.js');
+    const { dashPolyline } = await import('./js/io/rebuild.js');
+    await loadHandFonts();
+    const W = 1700, H = 2200, G = 46;
+    const c = new OffscreenCanvas(W, H);
+    const g = c.getContext('2d');
+    g.fillStyle = '#fff'; g.fillRect(0, 0, W, H);
+    g.strokeStyle = 'rgba(140,145,153,0.55)'; g.lineWidth = 1.2; g.beginPath();
+    for (let x = 0; x <= W; x += G) { g.moveTo(x + 0.5, 0); g.lineTo(x + 0.5, H); }
+    for (let y = 0; y <= H; y += G) { g.moveTo(0, y + 0.5); g.lineTo(W, y + 0.5); }
+    g.stroke();
+    g.fillStyle = '#999a9e'; g.fillRect(845, 0, 10, H);
+    let seed = 5;
+    for (const n of NOTES) {
+      const o = { type: 'text', hand: true, font: 'Gaegu', weight: n.w || 300, size: n.size, color: NOTE_COLORS[n.c], x: n.x, y: n.row * G - 7, text: n.t, seed: seed++, opacity: 1 };
+      drawHand(g, o);
+      const { layoutHand } = await import('./js/render/hand.js');
+      const L = layoutHand(o);
+      const a = n.x + L.box.x0, b = n.x + L.box.x1;
+      if (n.hl) {
+        const hs = { type: 'stroke', tool: 'highlighter', shape: 'line', color: n.hl === 'pink' ? '#fa7366' : '#ffdb26', size: 20, alpha: 0.75, opacity: 1, paths: [[[a - 2, o.y - 6, 0], [b + 4, o.y - 6, 0]]] };
+        g.save(); g.globalCompositeOperation = 'multiply'; drawStroke(g, hs, {}, buildStrokePath(hs)); g.restore();
+      }
+      if (n.ul) { g.strokeStyle = '#212126'; g.lineWidth = 2.2; g.lineCap = 'round'; g.beginPath(); g.moveTo(a - 2, o.y + 7); g.lineTo(b + 4, o.y + 7); g.stroke(); }
+    }
+    // Red dashed summary box around rows 16-17.
+    g.strokeStyle = '#e3453d'; g.lineWidth = 2.4; g.setLineDash([9, 8]); g.lineCap = 'round';
+    g.beginPath(); g.roundRect(58, 15 * G + 12, 800 - 58, 3 * G - 32, 8); g.stroke();
+    void dashPolyline;
+    const blob = await c.convertToBlob({ type: 'image/png' });
+    return await new Promise((r) => { const fr = new FileReader(); fr.onload = () => r(fr.result.split(',')[1]); fr.readAsDataURL(blob); });
+  }, { NOTES, NOTE_COLORS });
+  const png = path.join(out, 'synthetic-notes.png');
+  fs.writeFileSync(png, Buffer.from(b64, 'base64'));
+  await ed(() => { window.__app.noRebuildPrompt = true; });
+  await stubDialogs({ open: [png] });
+  await ed(() => window.__app.commands.open());
+  await win.waitForFunction(() => window.__editor.project?.title === 'synthetic-notes' && window.__editor.page.bg.kind === 'image', null, { timeout: 30000 });
+  const stats = await ed(() => window.__app.rebuildPages([window.__editor.page], { quiet: true }));
+  console.log('     rebuild:', JSON.stringify(stats));
+  const page = await ed(() => { const p = window.__editor.page; return { bg: p.bg, ref: !!p.ref, grid: p.grid, layers: p.layers.map((l) => ({ name: l.name, blend: l.blend, objs: l.objects })) }; });
+  assert.equal(page.bg.kind, 'grid');
+  assert.ok(page.bg.divider && Math.abs(page.bg.divider.x - 850) < 3, 'divider found');
+  assert.ok(Math.abs(page.grid.sx - 46) < 0.5, 'grid 46px');
+  assert.ok(page.ref, 'original scan kept for comparison');
+  assert.deepEqual(page.layers.map((l) => l.name), ['Highlights', 'Lines & sketches', 'Text']);
+  assert.equal(page.layers[0].blend, 'multiply');
+  const texts = page.layers[2].objs;
+  const hl = page.layers[0].objs;
+  const lines = page.layers[1].objs;
+  assert.equal(hl.length, 2, 'two highlights');
+  assert.ok(lines.some((o) => o.kind === 'dashbox' && o.color === '#e3453d'), 'red dashed box');
+  assert.ok(lines.some((o) => o.kind === 'line'), 'underline');
+  // OCR accuracy vs what we drew.
+  const lev = (a, b) => { const d = Array.from({ length: b.length + 1 }, (_, j) => j); for (let i = 1; i <= a.length; i++) { let p = d[0]; d[0] = i; for (let j = 1; j <= b.length; j++) { const t = d[j]; d[j] = Math.min(d[j] + 1, d[j - 1] + 1, p + (a[i - 1] !== b[j - 1])); p = t; } } return d[b.length]; };
+  const order = (o) => (o.x > 850 ? 1e6 : 0) + o.y * 10 + o.x / 1000;
+  const got = texts.slice().sort((a, b) => order(a) - order(b)).map((o) => o.text).join(' ');
+  const want = NOTES.slice().sort((a, b) => order({ x: a.x, y: a.row * 46 }) - order({ x: b.x, y: b.row * 46 })).map((n) => n.t).join(' ');
+  const cer = lev(got, want) / want.length;
+  console.log(`     OCR character error rate: ${(cer * 100).toFixed(1)}%`);
+  assert.ok(cer < 0.08, 'CER ' + cer);
+  // Colours, sizes and positions.
+  for (const n of NOTES) {
+    const o = texts.find((t) => Math.abs(t.y - (n.row * 46 - 7)) < 4 && Math.abs(t.x - n.x) < 25);
+    assert.ok(o, 'line found: ' + n.t);
+    assert.equal(o.color, NOTE_COLORS[n.c], 'colour of ' + n.t);
+    assert.ok(Math.abs(o.size - n.size) <= 3, `size of "${n.t}": ${o.size} vs ${n.size}`);
+    assert.ok(o.hand && o.font === 'Gaegu', 'handwriting font');
+  }
+  assert.equal(texts.find((t) => /TOPIC/.test(t.text)).weight, 400, 'TOPIC is bold');
+  await win.keyboard.press('Control+0');
+  await win.waitForTimeout(300);
+  await shot('10-rebuilt');
+  // Undo goes back to the scan, redo restores the rebuild.
+  await win.keyboard.press('Control+z');
+  assert.equal(await ed(() => window.__editor.page.bg.kind), 'image');
+  await win.keyboard.press('Control+y');
+  assert.equal(await ed(() => window.__editor.page.bg.kind), 'grid');
+});
+
+await step('every letter gets its own jitter; retyping keeps earlier letters', async () => {
+  const r = await ed(async () => {
+    const { layoutHand } = await import('./js/render/hand.js');
+    const o = { type: 'text', hand: true, font: 'Gaegu', weight: 300, size: 36, text: 'aaaa', seed: 9, x: 0, y: 0 };
+    const L = layoutHand(o);
+    const boxes = L.glyphs.map((g) => [+(g.box.x1 - g.box.x0).toFixed(2), +(g.box.y1 - g.box.y0).toFixed(2), +g.by.toFixed(2)]);
+    const o2 = { ...o, text: 'aaaab' };
+    const L2 = layoutHand(o2);
+    return { boxes, same: L2.glyphs.slice(0, 4).every((g, i) => g.box.x0 === L.glyphs[i].box.x0 && g.by === L.glyphs[i].by) };
+  });
+  assert.equal(new Set(r.boxes.map(String)).size, 4, 'four different "a" shapes: ' + JSON.stringify(r.boxes));
+  assert.ok(r.same, 'adding a letter keeps the earlier ones');
+});
+
+await step('edits are recorded with timestamps and replay letter by letter, with erase-and-rewrite', async () => {
+  // Retype a rebuilt line.
+  const t = await ed(() => window.__editor.page.layers.find((l) => l.name === 'Text').objects.find((o) => /Topography/.test(o.text)));
+  await ed((id) => window.__editor.setActiveLayer(window.__editor.page.layers.find((l) => l.name === 'Text').id));
+  await win.keyboard.press('t');
+  const [x, y] = await toScreen(t.x + 60, t.y - 10);
+  await win.mouse.click(x, y);
+  await win.waitForFunction(() => document.activeElement?.classList.contains('text-editor'));
+  await win.keyboard.press('End');
+  for (let i = 0; i < 5; i++) await win.keyboard.press('Backspace');
+  await win.keyboard.type('grade', { delay: 30 });
+  await win.keyboard.press('Escape');
+  const entry = await ed(() => { const j = window.__editor.project.journal; return j[j.length - 1]; });
+  assert.equal(entry.op.type, 'setObjs');
+  assert.ok(entry.anim.length >= 11, 'each keystroke recorded: ' + entry.anim.length);
+  assert.ok(entry.anim.every((a, i) => i === 0 || a[0] >= entry.anim[i - 1][0]), 'timestamps increase');
+  assert.ok(typeof entry.t === 'number');
+  // Auto replay: natural slips (written wrong, erased, rewritten).
+  const auto = await ed(async () => {
+    const { ReplayEngine } = await import('./js/io/replay.js');
+    const E = new ReplayEngine(window.__editor, window.__editor.page.id, { mode: 'auto' });
+    const textSegs = E.segs.filter((s) => s.kind === 'text');
+    const slip = textSegs.find((s) => s.acts.some((a) => a.type === 'del'));
+    return { n: textSegs.length, slips: textSegs.filter((s) => s.acts.some((a) => a.type === 'del')).length, at: slip && slip.t0 + slip.acts.find((a) => a.type === 'del').t0 + 80, dur: E.duration };
+  });
+  assert.ok(auto.n >= NOTES.length - 1, 'every line is written');
+  assert.ok(auto.slips >= 1 && auto.slips <= 3, 'a few erase-and-rewrite moments: ' + auto.slips);
+  // History replay contains the retype as delete + add actions.
+  const hist = await ed(async () => {
+    const { ReplayEngine } = await import('./js/io/replay.js');
+    const E = new ReplayEngine(window.__editor, window.__editor.page.id, { mode: 'history' });
+    const last = E.segs.filter((s) => s.kind === 'text').pop();
+    return { edits: E.editCount, acts: last.acts.map((a) => a.type) };
+  });
+  assert.ok(hist.edits >= 1);
+  assert.ok(hist.acts.includes('del') && hist.acts.includes('add'), 'erase then rewrite: ' + hist.acts);
+  // Look at a mid-slip frame and a mid-letter frame in the player.
+  await win.keyboard.press('Control+Shift+r');
+  await win.waitForSelector('.player');
+  await ed((t) => { const s = window.__player.state; s.playing = false; s.t = t; s.jump = true; s.dirty = true; }, auto.at);
+  await win.waitForTimeout(250);
+  await shot('11-replay-slip');
+  await win.keyboard.press('Escape');
 });
 
 await step('theme toggle and help overlay', async () => {

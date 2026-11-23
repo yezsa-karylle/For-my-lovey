@@ -10,7 +10,8 @@ export function uid(prefix = 'o') {
   return prefix + Date.now().toString(36) + Math.random().toString(36).slice(2, 8);
 }
 
-export const DEFAULT_SWATCHES = ['#1b1b1f', '#1f4fd1', '#d62828', '#1a8a4a', '#ffd43b', '#ff8fab'];
+// Black, blue, red first (keys 1-3), matching the notes' ink colours.
+export const DEFAULT_SWATCHES = ['#212126', '#296bd9', '#e3453d', '#268c4d', '#737880', '#ffdb26', '#fa7366'];
 
 export function defaultGrid(dpi = 200) {
   const sp = (dpi / 25.4) * 5; // 5 mm squares
@@ -177,9 +178,9 @@ export function objBBox(o, measure) {
 }
 
 export function textCorners(o, measure) {
-  const { w, h } = measure(o);
+  const { w, h, x0 = 0, y0 = 0 } = measure(o);
   const c = Math.cos(o.rot || 0), s = Math.sin(o.rot || 0);
-  return [[0, 0], [w, 0], [w, h], [0, h]].map(([x, y]) => [o.x + x * c - y * s, o.y + x * s + y * c]);
+  return [[x0, y0], [x0 + w, y0], [x0 + w, y0 + h], [x0, y0 + h]].map(([x, y]) => [o.x + x * c - y * s, o.y + x * s + y * c]);
 }
 
 /** Return a transformed copy of an object (matrix in page coords). */

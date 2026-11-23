@@ -7,9 +7,13 @@ import { closePicker } from './ui/colorpicker.js';
 import { importFile, extOf, baseName } from './io/importer.js';
 import { serializeProject, loadProject } from './io/projectFile.js';
 import { exportPdf, exportPng } from './io/exporter.js';
-import { exportReplay, planReplay, pickCodec, videoSize } from './io/replay.js';
+import { exportReplayMp4, ReplayEngine, pickCodec } from './io/replay.js';
+import { analyzePage, rebuildOp } from './io/rebuild.js';
+import { loadHandFonts, resetHandCache } from './render/hand.js';
+import { openPlayer, playerOpen } from './ui/player.js';
 import { newProject, newGridPage, clone, uid } from './core/model.js';
 import { resetTextCache } from './render/draw.js';
+void ReplayEngine;
 
 const api = window.api;
 
@@ -33,6 +37,7 @@ function loadSettings() {
     const s = JSON.parse(localStorage.getItem('redraft.settings') || '{}');
     const d = defaultSettings();
     if (typeof s.stabilizer === 'number') d.stabilizer = s.stabilizer;
+    if (s.markUnsure === false) d.markUnsure = false;
     for (const t of Object.keys(d.tools)) Object.assign(d.tools[t], (s.tools || {})[t] || {});
     editor.settings = d;
   } catch { /* defaults */ }
@@ -144,6 +149,7 @@ async function openPaths(paths) {
     await saveNow();
     addRecent(target, project.title);
     toast(`Opened ${project.pages.length} page${project.pages.length > 1 ? 's' : ''}. Autosaving to ${baseName(target)}.redraft next to your file.`, { ms: 4500 });
+    if (!app.noRebuildPrompt) offerRebuild();
   } catch (e) {
     pr.close();
     console.error(e);
@@ -324,48 +330,101 @@ async function doExportPng(pages, dpi, target) {
   }
 }
 
-async function replayDialog() {
-  const pr = editor.project;
-  if (!pr) return;
-  if (!pr.journal.length) { toast('Nothing to replay yet: draw or type something first.'); return; }
-  const fps = 30;
-  const speeds = [2, 4, 8, 16, 32, 64];
-  const est = (sp) => {
-    const plan = planReplay(pr.journal, { speed: sp, fps });
-    const s = (plan.reduce((a, p) => a + p.frames, 0) + fps * 2.6) / fps;
-    return s < 90 ? `${Math.round(s)} s` : `${Math.round(s / 60)} min`;
-  };
-  const best = speeds.find((sp) => { const plan = planReplay(pr.journal, { speed: sp, fps }); return plan.reduce((a, p) => a + p.frames, 0) / fps < 60; }) || 64;
-  const m = modal(`<h2>Replay video</h2>
-    <p class="sub">A fast-forward MP4 of everything you drew, typed and erased, starting from the original scan.</p>
-    <div class="row"><label>Speed</label><div class="seg" data-speed>${speeds.map((s) => `<button data-v="${s}" class="${s === best ? 'on' : ''}">${s}×</button>`).join('')}</div></div>
-    <p class="hint" data-est></p>
-    <div class="actions"><button class="btn outline" data-cancel>Cancel</button><button class="btn primary" data-go>${icon('play')}Export MP4</button></div>`);
-  const upd = () => { m.el.querySelector('[data-est]').textContent = `About ${est(+m.el.querySelector('[data-speed] .on').dataset.v)} long, ${pr.journal.length} recorded steps.`; };
-  m.el.querySelectorAll('[data-speed] button').forEach((b) => (b.onclick = () => { m.el.querySelectorAll('[data-speed] button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); upd(); }));
-  upd();
-  m.el.querySelector('[data-cancel]').onclick = () => m.close();
-  m.el.querySelector('[data-go]').onclick = async () => {
-    const speed = +m.el.querySelector('[data-speed] .on').dataset.v;
-    m.close();
-    await doExportReplay(speed);
-  };
+// ------------------------------------------------------------ make editable (rebuild)
+async function offerRebuild() {
+  const n = editor.project.pages.filter((p) => p.bg.kind === 'image').length;
+  if (!n) return;
+  const ok = await confirmDialog('Make these notes editable?',
+    `Redraft can read the ${n} page${n > 1 ? 's' : ''} (OCR) and rebuild ${n > 1 ? 'them' : 'it'} as live objects: grid paper, every text line in the same handwriting font and colour, highlights, dashed boxes and sketches. It takes about 10–20 seconds per page. You can also do this later, page by page, with "Make editable".`,
+    n > 1 ? `Rebuild all ${n} pages` : 'Rebuild page');
+  if (ok) await rebuildPages(editor.project.pages);
 }
 
-async function doExportReplay(speed, target) {
+async function rebuildPages(pages, { quiet = false } = {}) {
+  const todo = pages.filter((p) => p.bg.kind === 'image' || (p.ref && !p.rebuilt));
+  if (!todo.length) { if (!quiet) toast(pages.length === 1 && pages[0].rebuilt ? 'This page is already editable' : 'No scanned pages to rebuild'); return []; }
+  const pr = progressModal('Making notes editable');
+  pr.cancellable();
+  const stats = [];
+  try {
+    for (const [k, page] of todo.entries()) {
+      if (pr.cancelled) break;
+      const no = editor.project.pages.indexOf(page) + 1;
+      const bmp = await editor.scanBitmap(page);
+      const res = await analyzePage(bmp, page.w, page.h, {
+        onProgress: (label) => pr.set(k + 0.5, todo.length, `Page ${no}: ${label}`),
+        textItems: page.pdfText || null,
+      });
+      const live = editor.project.pages.find((p) => p.id === page.id);
+      editor.commit(rebuildOp(live, res), { rebuild: true, page: page.id });
+      stats.push({ page: no, ...res.stats });
+      pr.set(k + 1, todo.length, `Page ${no} done`);
+    }
+  } catch (e) {
+    console.error(e);
+    toast('Rebuild failed: ' + e.message, { ms: 6000 });
+  } finally {
+    pr.close();
+  }
+  if (stats.length) {
+    editor.caches.clear();
+    const textLayer = editor.page.layers.find((l) => l.name === 'Text');
+    if (textLayer) editor.setActiveLayer(textLayer.id);
+    editor.requestRender();
+    panels.refreshAll();
+    if (!quiet) toast(`Rebuilt ${stats.length} page${stats.length > 1 ? 's' : ''}: ${stats.reduce((s, x) => s + x.text, 0)} text lines, ${stats.reduce((s, x) => s + x.highlights, 0)} highlights, ${stats.reduce((s, x) => s + x.lines + x.sketches, 0)} lines & sketches. Show "Original scan (compare)" in Layers to check.`, { ms: 7000 });
+  }
+  return stats;
+}
+app.rebuildPages = rebuildPages;
+
+// ------------------------------------------------------------ replay
+function openReplay() {
+  if (!editor.project) return;
+  closeModal();
+  openPlayer(editor, app);
+}
+
+app.replayExportDialog = ({ pageId = editor.page.id, mode = 'auto', speed = 8 } = {}) => {
+  const speeds = [1, 2, 4, 8, 16];
+  const m = modal(`<h2>Export replay video</h2>
+    <p class="sub">MP4, 1080p at 30 frames per second, in fast forward.</p>
+    <div class="row"><label>Pages</label><div class="seg" data-pages><button data-v="one" class="on">This page</button><button data-v="all">All ${editor.project.pages.length} pages</button></div></div>
+    <div class="row"><label>Content</label><div class="seg" data-mode><button data-v="auto" class="${mode === 'auto' ? 'on' : ''}">Write the page</button><button data-v="history" class="${mode === 'history' ? 'on' : ''}">Page + my edits</button></div></div>
+    <div class="row"><label>Format</label><div class="seg" data-format><button data-v="landscape" class="on">1920×1080 · follow pen</button><button data-v="portrait">1080×1920 · whole page</button></div></div>
+    <div class="row"><label>Speed</label><div class="seg" data-speed>${speeds.map((x) => `<button data-v="${x}" class="${x === speed ? 'on' : ''}">${x}×</button>`).join('')}</div></div>
+    <p class="hint" data-est></p>
+    <div class="actions"><button class="btn outline" data-cancel>Cancel</button><button class="btn primary" data-go>${icon('play')}Export MP4</button></div>`);
+  const val = (k) => m.el.querySelector(`[data-${k}] .on`).dataset.v;
+  const est = () => {
+    const ids = val('pages') === 'all' ? editor.project.pages.map((p) => p.id) : [pageId];
+    const total = ids.reduce((s, id) => s + new ReplayEngine(editor, id, { mode: val('mode') }).duration, 0);
+    m.el.querySelector('[data-est]').textContent = `Video length about ${Math.max(1, Math.round(total / +val('speed') / 1000))} s (${Math.round(total / 60000)} min of writing at 1×).`;
+  };
+  m.el.querySelectorAll('.seg').forEach((sg) => sg.querySelectorAll('button').forEach((b) => (b.onclick = () => { sg.querySelectorAll('button').forEach((x) => x.classList.remove('on')); b.classList.add('on'); est(); })));
+  est();
+  m.el.querySelector('[data-cancel]').onclick = () => m.close();
+  m.el.querySelector('[data-go]').onclick = async () => {
+    const opts = { pageIds: val('pages') === 'all' ? editor.project.pages.map((p) => p.id) : [pageId], mode: val('mode'), speed: +val('speed'), format: val('format') };
+    m.close();
+    await doExportReplay(opts);
+  };
+};
+
+async function doExportReplay(opts, target) {
   const p = target || (await api.saveDialog('mp4', exportBase() + ' replay.mp4'));
   if (!p) return null;
-  const pr = progressModal('Rendering replay');
+  const pr = progressModal('Rendering replay video');
   pr.cancellable();
   try {
-    const res = await exportReplay(editor, {
-      speed,
+    const res = await exportReplayMp4(editor, opts.pageIds || [editor.page.id], {
+      ...opts,
       onProgress: (d, t) => pr.set(d, t, `Frame ${d} of ${t}`),
       isCancelled: () => pr.cancelled,
     });
     await api.writeFile(p, res.bytes);
     pr.close();
-    toast(`Replay saved (${Math.round(res.seconds)} s)`, { action: { label: 'Show in folder', run: () => api.showInFolder(p) } });
+    toast(`Replay saved (${Math.round(res.seconds)} s, ${res.width}×${res.height})`, { action: { label: 'Show in folder', run: () => api.showInFolder(p) } });
     return res;
   } catch (e) {
     pr.close();
@@ -435,7 +494,7 @@ const SHORTCUTS = [
   ['Edit', [['Undo', 'Ctrl + Z'], ['Redo', 'Ctrl + Y / Ctrl + Shift + Z'], ['Select all on layer', 'Ctrl + A'], ['Copy / Cut / Paste', 'Ctrl + C / X / V'], ['Duplicate selection', 'Ctrl + D'], ['Delete selection', 'Del'], ['Nudge selection', 'Arrows (Shift = ×10)'], ['Deselect / finish text', 'Esc']]],
   ['View', [['Pan', 'Space + drag, scroll, middle-drag'], ['Zoom', 'Ctrl + scroll, pinch'], ['Zoom in / out', 'Ctrl + = / Ctrl + −'], ['Fit page', 'Ctrl + 0'], ['Actual size', 'Ctrl + 1'], ['Fit width', 'Ctrl + 2'], ['Hide panels', 'Tab'], ['Full screen', 'F11'], ['Dark / light', 'Ctrl + Shift + L']]],
   ['Pages & layers', [['Next / previous page', 'PgDn / PgUp'], ['First / last page', 'Home / End'], ['New grid page', 'Ctrl + N'], ['Duplicate page', 'Ctrl + Shift + D'], ['Delete page', 'Ctrl + Shift + Del'], ['New layer', 'Ctrl + Shift + N'], ['Layer up / down', 'Ctrl + ] / Ctrl + ['], ['Show / hide scan', 'Shift + B']]],
-  ['File', [['Open', 'Ctrl + O'], ['Insert PDF/image pages', 'Ctrl + Shift + O'], ['Save', 'Ctrl + S'], ['Save as', 'Ctrl + Shift + S'], ['Export PDF', 'Ctrl + E'], ['Export PNG', 'Ctrl + Shift + E'], ['Replay video', 'Ctrl + Shift + R'], ['Shortcuts', 'F1 or ?']]],
+  ['File', [['Open', 'Ctrl + O'], ['Insert PDF/image pages', 'Ctrl + Shift + O'], ['Save', 'Ctrl + S'], ['Save as', 'Ctrl + Shift + S'], ['Export PDF', 'Ctrl + E'], ['Export PNG', 'Ctrl + Shift + E'], ['Replay (watch, scrub, export MP4)', 'Ctrl + Shift + R'], ['Make page editable (OCR)', 'Ctrl + Shift + T'], ['Shortcuts', 'F1 or ?']]],
 ];
 function showHelp() {
   modal(`<h2>Keyboard shortcuts</h2><p class="sub">Everything also works with a touchpad: two-finger scroll pans, pinch zooms.</p>
@@ -453,7 +512,10 @@ const commands = {
   exportPdf: () => exportDialog('pdf'),
   exportPng: () => exportDialog('png'),
   exportPngAll: () => exportDialog('pngAll'),
-  exportReplay: replayDialog,
+  exportReplay: () => editor.project && app.replayExportDialog(),
+  replay: openReplay,
+  rebuildPage: () => editor.project && rebuildPages([editor.page]),
+  rebuildAll: () => editor.project && rebuildPages(editor.project.pages),
   undo: () => editor.undo(),
   redo: () => editor.redo(),
   zoomIn: () => editor.zoomAt(1.25),
@@ -473,7 +535,7 @@ app.doExportReplay = doExportReplay;
 app.saveNow = saveNow;
 app.openPaths = openPaths;
 app.pickCodec = pickCodec;
-app.videoSize = videoSize;
+app.openReplay = openReplay;
 
 document.addEventListener('click', (e) => {
   const c = e.target.closest('[data-cmd]');
@@ -487,7 +549,7 @@ document.addEventListener('click', (e) => {
 const isTyping = (e) => e.target.closest && e.target.closest('input, textarea, select, [contenteditable]');
 
 window.addEventListener('keydown', (e) => {
-  if (isTyping(e)) return;
+  if (isTyping(e) || playerOpen()) return;
   // A text box is open but lost focus: send the keys back to it.
   if (editor.textEditor && !e.ctrlKey && !e.metaKey && !/^F\d+$/.test(e.key)) {
     if (e.key === 'Escape') editor.closeTextEditor();
@@ -517,7 +579,8 @@ window.addEventListener('keydown', (e) => {
       o: () => (e.shiftKey ? insertFiles() : commands.open()),
       s: () => (e.shiftKey ? saveAs() : save()),
       e: () => (e.shiftKey ? exportDialog('png') : exportDialog('pdf')),
-      r: () => e.shiftKey && replayDialog(),
+      r: () => e.shiftKey && openReplay(),
+      t: () => e.shiftKey && commands.rebuildPage(),
       n: () => (e.shiftKey ? editor.project && editor.addLayer() : editor.project ? addGridPage() : newNotebook()),
       d: () => (e.shiftKey ? duplicatePage() : editor.duplicateSelection()),
       a: () => editor.selectAll(),
@@ -666,9 +729,10 @@ api.onOpenPath((p) => openPaths([p]));
   app.info = await api.pathInfo();
   renderRecent();
   // Fonts load lazily; re-measure text once they're ready.
-  const fams = ['Caveat', 'Patrick Hand', 'Kalam', 'Architects Daughter', 'Indie Flower'];
-  await Promise.allSettled(fams.flatMap((f) => [document.fonts.load(`400 40px "${f}"`), document.fonts.load(`700 40px "${f}"`)]));
+  const fams = ['Caveat', 'Patrick Hand', 'Kalam', 'Architects Daughter', 'Indie Flower', 'Gaegu'];
+  await Promise.allSettled([...fams.flatMap((f) => [300, 400, 700].map((w) => document.fonts.load(`${w} 40px "${f}"`))), loadHandFonts()]);
   resetTextCache();
+  resetHandCache();
   editor.invalidateAll();
   editor.requestRender();
   const f = await api.launchFile();

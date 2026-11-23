@@ -2,7 +2,7 @@
 <html lang="en" data-theme="light">
 <head>
   <meta charset="utf-8">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob: data:; media-src 'self' blob:">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; font-src 'self' data:; worker-src 'self' blob:; connect-src 'self' blob: data:; media-src 'self' blob:">
   <title>Redraft</title>
   <link rel="stylesheet" href="fonts.css">
   <link rel="stylesheet" href="styles.css">
@@ -10,6 +10,8 @@
   <script src="../node_modules/pdf-lib/dist/pdf-lib.min.js"></script>
   <script src="../node_modules/jszip/dist/jszip.min.js"></script>
   <script src="../node_modules/mp4-muxer/build/mp4-muxer.js"></script>
+  <script src="../node_modules/opentype.js/dist/opentype.min.js"></script>
+  <script src="../node_modules/tesseract.js/dist/tesseract.min.js"></script>
   <script type="module" src="js/main.js"></script>
 </head>
 <body>
@@ -26,11 +28,14 @@
           <button data-cmd="exportPng"><span data-icon="image"></span>PNG (this page)<span class="k">Ctrl+Shift+E</span></button>
           <button data-cmd="exportPngAll"><span data-icon="image"></span>PNG (every page)</button>
           <hr>
-          <button data-cmd="exportReplay"><span data-icon="play"></span>Replay video (MP4)<span class="k">Ctrl+Shift+R</span></button>
+          <button data-cmd="exportReplay"><span data-icon="play"></span>Replay video (MP4)…</button>
           <hr>
           <button data-cmd="saveAs"><span data-icon="save"></span>Save project as…<span class="k">Ctrl+Shift+S</span></button>
         </div>
       </div>
+      <span class="sep"></span>
+      <button class="btn" data-cmd="rebuildPage" data-tip="Rebuild this scanned page as editable text, highlights, boxes and sketches|Ctrl+Shift+T"><span data-icon="wand"></span>Make editable</button>
+      <button class="btn" data-cmd="replay" data-tip="Watch the page being written; scrub, change speed, export MP4|Ctrl+Shift+R"><span data-icon="play"></span>Replay</button>
     </div>
     <div class="tb-center"><span id="doc-title"></span><span id="save-state"></span></div>
     <div class="tb-right">

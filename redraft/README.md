@@ -44,14 +44,38 @@ Open the finished run and download the **Redraft-Setup** artifact. It's a zip co
 | Ruler | **R** shows a ruler. Drag its body to move it and its round knobs to rotate it (snaps to 45°, or 15° with Shift). Strokes started along an edge come out perfectly straight. |
 | Cover & rewrite | **W** paints grid paper that matches your scan (grid spacing, offset and colours are auto-detected on import). Draw over old writing, then write on top. Press **W** again for box mode, or draw a loop and hold to fill it. The **Auto-match scan grid** button and sliders fine-tune the match, and Alt+click samples the paper colour. |
 | Erasers | **E** is a brush eraser; press **E** again for a whole-stroke eraser. Both only touch your layers, never the scan. |
-| Text | **T**, then click and type. Fonts: Caveat, Patrick Hand, Kalam, Architects Daughter, Indie Flower (all bundled), plus Windows' Ink Free and Segoe Print. Click text to retype it and drag to move it. Use the lasso to resize, rotate or recolour it. |
+| Text | **T**, then click and type. Fonts: Gaegu (the notes' font), Caveat, Patrick Hand, Kalam, Architects Daughter, Indie Flower (all bundled, all with natural per-letter jitter), plus Windows' Ink Free and Segoe Print. Click text to retype it and drag to move it. Use the lasso to resize, rotate or recolour it. |
 | Select | **L** (or S): loop around anything, or click one item. Drag to move, use the corners to scale and the top knob to rotate. Ctrl+C / X / V / D and Delete work. Click a swatch to recolour the selection. |
 | Colours | Click the colour chip for the picker. **I** is the eyedropper (or Alt+click with any brush). Swatches 1–9 (black, blue, red…) are on the number keys. **+** saves a swatch and right-click removes one. |
 | Pages | Thumbnails on the left: click to open a page, drag to reorder, right-click for more. Ctrl+N adds a blank grid page, Ctrl+Shift+D duplicates, Ctrl+Shift+O inserts more PDF/image pages. |
 | View | Scroll/two-finger pan, Ctrl+scroll/pinch zoom, Space+drag or middle-drag pan, Ctrl+0 fit, Tab hides the panels. |
-| Export | **Export → PDF** or **PNG** at 150/300/600 dpi. Ink is re-rendered at full resolution, so it stays crisp. **Replay video** saves an MP4 timelapse of every stroke, keystroke, erase and undo, starting from the original scan. |
+| Export | **Export → PDF** or **PNG** at 150/300/600 dpi. Ink is re-rendered at full resolution, so it stays crisp. **Replay video (MP4)** is covered below. |
 
 Press **F1** in the app for the full shortcut list.
+
+## Editable notes: rebuild scanned pages as live objects
+
+Made for the handwritten-style notes PDFs on grid paper (two columns, dated TOPIC headers, red and blue notes, highlights, dashed boxes).
+
+1. **Open** the PDF (Ctrl+O). Redraft asks *"Make these notes editable?"*. Choose **Rebuild** for all pages, or later use **Make editable** in the top bar (Ctrl+Shift+T) on one page at a time. It takes about 8–15 s per page, fully offline.
+2. Each page is rebuilt into three layers above fresh grid paper (same 46 px grid and centre divider):
+   - **Text**: every line is its own text object in the notes' font (**Gaegu**), with the same colour (black, red, blue, gray), size, weight and position, snapped to the grid row.
+   - **Lines & sketches**: red dashed boxes and separators, underlines, and any drawings traced into vector strokes.
+   - **Highlights**: the pink and yellow highlighter bars (multiply blend, like real highlighter).
+3. **Check the OCR.** Lines the reader was unsure about get an orange dotted underline (on screen only, never exported). In **Layers**, show **Original scan (compare)** to overlay the scan at 50% and spot differences. On page 1 of ARCH 595 the text came out about 96% character-accurate. Fix a line by clicking it with the **Text** tool (T) and retyping.
+4. **Edit anything.** Text tool: click a line to retype it, drag it to move it. Lasso (L): select lines, boxes or sketches, then move, resize (corners), rotate (top knob), recolour (click a swatch or press 1 black / 2 blue / 3 red), copy/paste or delete. Undo is unlimited.
+5. **Write new lines that match.** With the Text tool, click any empty row. The text sits on the grid line in Gaegu, and when you press Esc every letter gets its own slight size, tilt and baseline jitter (*Natural handwriting*, on by default), so it doesn't look like a font.
+
+Every edit is recorded in the project file with timestamps: each keystroke while typing, each stroke point, erases, moves and undos.
+
+## Replay
+
+**Replay** in the top bar (Ctrl+Shift+R) opens the player:
+
+- **Write the page**: animates the whole page being written by pen, letter by letter (letters are drawn along their pen strokes, not popped in), column by column, top to bottom. Highlights and underlines follow their words, boxes follow their contents, and there are a few natural slips where a word is written wrong, erased and rewritten.
+- **My edits**: writes the original page, then plays back your real recorded edits, including retyping, erasing and undo.
+- **Speed** 1× 2× 4× 8× 16× (keys 1–5), a **timeline scrubber**, Space to play/pause, ←/→ to skip, **Whole page** or **Follow the pen** camera.
+- **Export MP4**: 1080p at 30 fps, as 1920×1080 with the camera following the pen, or 1080×1920 showing the whole page. Choose this page or all pages and the fast-forward speed. A page takes about 8 minutes of writing at 1×, so roughly 30 s of video at 16×.
 
 ## Development
 
@@ -63,5 +87,7 @@ npm run test:e2e     # drives the real app with mouse + keyboard (on Linux: xvfb
 npm run dist         # Windows installer (run on Windows; on Linux/macOS electron-builder needs Wine)
 ```
 
-Layout: `main.cjs` (window, file IO) · `preload.cjs` (safe bridge) · `src/js/core` (pure model: ops, history, geometry, shapes) · `src/js/render` (brushes, grid paper) · `src/js/io` (import, project files, export, replay) · `src/js/ui` (panels).
+Layout: `main.cjs` (window, file IO) · `preload.cjs` (safe bridge) · `src/js/core` (pure model: ops, history, geometry, shapes) · `src/js/render` (brushes, grid paper, `hand.js` natural handwriting + pen-path skeletons) · `src/js/io` (import, `rebuild.js` page analysis + OCR, project files, export, `replay.js` timeline + MP4) · `src/js/ui` (panels, replay player).
+
+Third-party pieces (all bundled, offline): pdf.js, pdf-lib, JSZip, perfect-freehand, mp4-muxer, tesseract.js (OCR, Apache-2.0) with English data, opentype.js, and the fonts (SIL OFL).
 Every edit is a serialisable operation, which is what makes unlimited undo, autosave and the replay video share one history.

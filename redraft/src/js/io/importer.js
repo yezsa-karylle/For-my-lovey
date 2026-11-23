@@ -63,9 +63,22 @@ async function importPdf(bytes, onProgress) {
     ctx.fillStyle = '#fff';
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     await pg.render({ canvasContext: ctx, viewport: vp }).promise;
+    // Embedded text (if any) is kept so "Make editable" can read it directly instead of OCR.
+    let pdfText = null;
+    try {
+      const tc = await pg.getTextContent();
+      const items = tc.items.filter((it) => it.str && it.str.trim());
+      if (items.length) {
+        pdfText = items.map((it) => {
+          const [x, base] = vp.convertToViewportPoint(it.transform[4], it.transform[5]);
+          return { str: it.str, x, base, size: Math.hypot(it.transform[2], it.transform[3]) * scale };
+        });
+      }
+    } catch { /* no text layer */ }
     const id = uid('a');
     assets.set(id, { mime: 'image/jpeg', bytes: await canvasToBytes(canvas, 'image/jpeg', 0.92) });
     const page = newPage({ w: canvas.width, h: canvas.height, dpi: scale * 72, bg: { kind: 'image', asset: id } });
+    if (pdfText) page.pdfText = pdfText;
     applyGrid(page, canvas);
     pages.push(page);
     if (i <= 3) bitmaps.set(id, await createImageBitmap(canvas));
