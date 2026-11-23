@@ -10,7 +10,9 @@
     "start": "electron .",
     "test": "node --test \"test/unit/*.test.js\"",
     "test:e2e": "node test/e2e/run.js",
-    "dist": "electron-builder --win nsis --x64"
+    "dist": "electron-builder --win nsis --x64",
+    "build:web": "node scripts/build-web.mjs",
+    "test:web": "node test/web/run.js"
   },
   "dependencies": {
     "@fontsource/architects-daughter": "^5.3.0",

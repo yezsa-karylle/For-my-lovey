@@ -1,0 +1,40 @@
+name: Deploy Redraft web
+
+# Publishes the browser / iPhone version to the gh-pages branch under /redraft/.
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - 'redraft/**'
+      - '.github/workflows/redraft-web.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: redraft
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: redraft/package-lock.json
+      - run: npm ci --ignore-scripts
+      - run: npm test
+      - run: npm run build:web
+      - name: Publish to gh-pages
+        run: |
+          cd web-dist
+          printf '<!doctype html><meta charset="utf-8"><meta http-equiv="refresh" content="0; url=redraft/"><a href="redraft/">Redraft</a>\n' > index.html
+          git init -q -b gh-pages
+          git config user.name "github-actions[bot]"
+          git config user.email "41898333+github-actions[bot]@users.noreply.github.com"
+          git add -A
+          git commit -q -m "Deploy Redraft web from ${GITHUB_SHA}"
+          git push -f "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${GITHUB_REPOSITORY}.git" gh-pages

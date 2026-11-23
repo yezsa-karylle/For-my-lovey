@@ -256,10 +256,18 @@ export class Editor {
     const page = this.page;
     if (!page || !this.cw) return;
     const pad = 40;
-    const z = Math.min((this.cw - pad * 2) / page.w, (this.ch - pad * 2) / page.h);
+    // Leave room for the floating tool bar (vertical on desktop/tablet, a bottom dock on phones).
+    let left = pad, bottom = pad;
+    const tb = document.getElementById('toolbar');
+    if (tb && tb.offsetWidth) {
+      const r = tb.getBoundingClientRect(), st = this.stage.getBoundingClientRect();
+      if (r.height > r.width) left = Math.max(pad, r.right - st.left + 16);
+      else bottom = Math.max(pad, st.bottom - r.top + 12);
+    }
+    const z = Math.min((this.cw - left - pad) / page.w, (this.ch - pad - bottom) / page.h);
     this.view.zoom = Math.max(0.02, z);
-    this.view.x = (this.cw - page.w * this.view.zoom) / 2;
-    this.view.y = Math.max(pad, (this.ch - page.h * this.view.zoom) / 2);
+    this.view.x = left + (this.cw - left - pad - page.w * this.view.zoom) / 2;
+    this.view.y = Math.max(pad, (this.ch - bottom + pad - page.h * this.view.zoom) / 2);
     this._fitted = true;
     this.viewChanged();
   }

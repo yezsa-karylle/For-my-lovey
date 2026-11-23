@@ -33,6 +33,27 @@ Open a PDF or image, and each page becomes a canvas with the original scan as a 
 The workflow `.github/workflows/redraft-windows.yml` builds and tests the app on a Windows machine every time `redraft/` changes on GitHub (or when you run it by hand from the **Actions** tab → *Build Redraft for Windows* → **Run workflow**).
 Open the finished run and download the **Redraft-Setup** artifact. It's a zip containing the `.exe` installer.
 
+## On iPhone / iPad (web app)
+
+Redraft also runs in Safari as an installable web app:
+**https://yezsa-karylle.github.io/For-my-lovey/redraft/**
+
+1. Open the link in **Safari** (not Chrome; only Safari can install home-screen apps on iOS).
+2. Tap **Share** (the square with the up arrow) → **Add to Home Screen** → **Add**.
+3. Open **Redraft** from the home screen. It runs full-screen with its own icon, and works offline after the first launch.
+
+What's different from the Windows app:
+
+- **Open** uses the Files picker (PDF, images or a `.redraft` file from iCloud Drive, AirDrop and so on).
+- **Projects autosave on the device** (in the browser's storage) and are listed on the start screen. To move a project to the Windows app or another device, use **Export → Download project file (.redraft)**.
+- **Exports** (PDF, PNG, video) open a sheet with **Share / Save to Files** and **Download**.
+- **Gestures:** one finger draws; two fingers pan and pinch-zoom; a **two-finger tap undoes** and a **three-finger tap redoes**. Apple Pencil pressure changes the line width, and your palm is ignored while the Pencil is drawing.
+- On a phone, the tools sit in a bottom dock. The **layers icon** (top left) opens Pages, and the **sliders icon** (top right) opens tool settings, colours and layers.
+- **Replay video** is MP4 (H.264) when the device can encode it (Safari 16.4+/iOS 16.4+), otherwise WebM.
+- iOS may clear website data for sites you haven't opened in weeks. Apps added to the Home Screen are kept, but download a `.redraft` copy of anything important.
+
+Building the web version: `npm run build:web` writes `web-dist/redraft/` (a static site with a service worker and manifest), and `npm run test:web` tests it as an iPhone (touch gestures, pen pressure, offline mode, share/download, video fallbacks). The **Deploy Redraft web** GitHub workflow publishes it to GitHub Pages.
+
 ## Using it
 
 | Task | How |
@@ -85,6 +106,8 @@ npm start            # run the app
 npm test             # unit tests (geometry, stabilizer, shape snapping, undo/redo model)
 npm run test:e2e     # drives the real app with mouse + keyboard (on Linux: xvfb-run -a npm run test:e2e)
 npm run dist         # Windows installer (run on Windows; on Linux/macOS electron-builder needs Wine)
+npm run build:web    # browser / iPhone version -> web-dist/redraft
+npm run test:web     # tests the web build as an iPhone (needs Chrome/Chromium; set CHROME_PATH if it isn't found)
 ```
 
 Layout: `main.cjs` (window, file IO) · `preload.cjs` (safe bridge) · `src/js/core` (pure model: ops, history, geometry, shapes) · `src/js/render` (brushes, grid paper, `hand.js` natural handwriting + pen-path skeletons) · `src/js/io` (import, `rebuild.js` page analysis + OCR, project files, export, `replay.js` timeline + MP4) · `src/js/ui` (panels, replay player).

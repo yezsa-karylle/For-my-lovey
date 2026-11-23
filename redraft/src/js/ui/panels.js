@@ -107,7 +107,9 @@ export class Panels {
         label: 'Stabilizer', min: 0, max: 100, value: ed.settings.stabilizer, fmt: (v) => v,
         onInput: (v) => { ed.settings.stabilizer = v; }, onChange: () => this.app.saveSettings(),
       }));
-      card.appendChild(h(`<p class="hint">Higher stabilizer = smoother, hand-drawn lines. <b>Hold still</b> at the end of a stroke to snap it to a clean line, box, circle or arrow. <b>Shift</b>-drag draws a straight line. <b>Alt</b>-click picks a colour.</p>`));
+      card.appendChild(h(matchMedia('(pointer: coarse)').matches
+        ? `<p class="hint">Higher stabilizer = smoother lines. <b>Hold still</b> at the end of a stroke to snap it to a clean line, box, circle or arrow. <b>Two fingers</b> pan and zoom · <b>two-finger tap</b> undo · <b>three-finger tap</b> redo. Apple Pencil pressure changes the width.</p>`
+        : `<p class="hint">Higher stabilizer = smoother, hand-drawn lines. <b>Hold still</b> at the end of a stroke to snap it to a clean line, box, circle or arrow. <b>Shift</b>-drag draws a straight line. <b>Alt</b>-click picks a colour.</p>`));
     } else if (t === 'eraser') {
       card.appendChild(seg('Mode', [['brush', 'Brush'], ['stroke', 'Whole stroke']], s.mode, (v) => { s.mode = v; ed.emit('settings'); ed.updateCursor(); }));
       card.appendChild(size(200, 1));

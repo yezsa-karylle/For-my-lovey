@@ -735,9 +735,12 @@ export async function analyzePage(source, pageW, pageH, { onProgress = () => {},
     // Per-word estimate: robust to punctuation the OCR dropped or a garbled word.
     const per = r.words
       .filter((w) => w.conf >= 70 && w.x1 > w.x0 && /^[A-Za-z]{3,}[.,;:]?$/.test(w.text))
-      .map((w) => (w.x1 - w.x0 + 1) / Math.max(0.3, (naturalWidth('Gaegu', weight, w.text) || 1) - 0.06))
+      .map((w) => (w.x1 - w.x0 - 2) / Math.max(0.3, (naturalWidth('Gaegu', weight, w.text.replace(/[.,;:]$/, '')) || 1) - 0.06)) // OCR boxes carry ~3px padding
       .sort((a, b) => a - b);
-    let size = sizeW;
+    // Median of the whole-line estimate and each confidently read word: one misread
+    // character (an extra "(" or a dropped ":") can't drag the size far.
+    const cands = [sizeW, ...per].sort((a, b) => a - b);
+    let size = cands.length % 2 ? cands[(cands.length - 1) / 2] : (cands[cands.length / 2 - 1] + cands[cands.length / 2]) / 2;
     if (Math.abs(size - sizeH) / sizeH > 0.45) size = sizeH; // OCR text is clearly off: trust letter height
     const near = KNOWN_SIZES.reduce((b, s) => (Math.abs(s - size) < Math.abs(b - size) ? s : b), KNOWN_SIZES[0]);
     if (Math.abs(near - size) / size < 0.09) size = near;

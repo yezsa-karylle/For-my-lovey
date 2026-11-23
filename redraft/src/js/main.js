@@ -732,6 +732,10 @@ document.querySelectorAll('[data-icon]').forEach((el) => { if (el.id || el.class
 applyTheme(localStorage.getItem('redraft.theme') || (matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light'));
 initTooltips();
 
+if (WEB) {
+  const b = document.querySelector('.menu [data-cmd=saveAs]');
+  if (b) b.innerHTML = `${icon('download')}Download project file (.redraft)`;
+}
 editor.on('toast', (m) => toast(m));
 editor.on('view', updateStatus);
 editor.on('page', updateStatus);

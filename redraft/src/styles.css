@@ -308,11 +308,11 @@ body { -webkit-touch-callout: none; -webkit-user-select: none; overscroll-behavi
 
 @media (max-width: 760px) {
   .mobile-only { display: inline-flex !important; }
-  .desktop-only, .statusbar, .tb-center, .zoom-group [data-cmd=zoomIn], .zoom-group [data-cmd=zoomOut], #zoom-label, .brand-name { display: none !important; }
+  .desktop-only, .statusbar, .tb-center, .zoom-group, .brand, .tb-left [data-cmd=save], .tb-right .sep { display: none !important; }
   #app { grid-template-rows: auto 1fr; }
   .topbar { grid-template-columns: 1fr auto; height: 52px; padding: 0 6px; gap: 4px; }
-  .tb-left { gap: 0; overflow-x: auto; scrollbar-width: none; }
-  .tb-left::-webkit-scrollbar { display: none; }
+  .tb-left { gap: 0; }
+  .menu { position: fixed; top: calc(52px + env(safe-area-inset-top)); left: 8px; right: 8px; min-width: 0; }
   .tb-left .btn { font-size: 0; gap: 0; width: 40px; padding: 0; justify-content: center; flex: none; }
   .tb-left .btn svg.i { width: 21px; height: 21px; }
   .tb-left .sep { display: none; }
@@ -344,4 +344,19 @@ body { -webkit-touch-callout: none; -webkit-user-select: none; overscroll-behavi
   .player-bar { flex-wrap: wrap; padding: 8px 10px; gap: 8px; }
   .player-bar input[type=range] { order: 5; flex-basis: 100%; }
   #toasts { bottom: calc(86px + env(safe-area-inset-bottom)); }
+}
+
+/* Tablets in portrait (e.g. iPad 810–1024 px): keep the panels, make everything fit. */
+@media (min-width: 761px) and (max-width: 1180px) {
+  .main { grid-template-columns: 120px 1fr 272px; }
+  #page-list { padding: 4px 8px 12px; gap: 10px; }
+  .tb-center { display: none; }
+  .topbar { grid-template-columns: 1fr auto; }
+  .tb-left .btn { font-size: 0; gap: 0; width: 40px; padding: 0; justify-content: center; }
+  .tb-left .btn svg.i { width: 21px; height: 21px; }
+  .brand-name { display: none; }
+  .side-panel { padding: 8px; }
+  .card { padding: 10px; }
+  .row label { width: 64px; }
+  .swatches { grid-template-columns: repeat(6, 1fr); }
 }

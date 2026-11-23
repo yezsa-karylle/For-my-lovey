@@ -1,3 +1,5 @@
 node_modules/
 dist/
 test/e2e/out/
+web-dist/
+test/web/out/
